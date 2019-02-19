@@ -1,0 +1,20 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/james/Roblucks/roblucksPI/Message.h
+
+/home/james/Roblucks/roblucksPI/SerialIO/SerialIO.h
+string
+-
+
+/home/james/Roblucks/roblucksPI/main.cpp
+Message.h
+/home/james/Roblucks/roblucksPI/Message.h
+SerialIO/SerialIO.h
+/home/james/Roblucks/roblucksPI/SerialIO/SerialIO.h
+
