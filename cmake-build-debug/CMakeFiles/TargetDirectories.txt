@@ -1,3 +1,0 @@
-/home/james/Roblucks/roblucksPI/cmake-build-debug/CMakeFiles/rebuild_cache.dir
-/home/james/Roblucks/roblucksPI/cmake-build-debug/CMakeFiles/roblucksPI.dir
-/home/james/Roblucks/roblucksPI/cmake-build-debug/CMakeFiles/edit_cache.dir

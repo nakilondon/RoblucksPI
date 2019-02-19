@@ -1,13 +1,29 @@
 #include "Message.h"
+#include <unistd.h>
+
 #include "SerialIO/SerialIO.h"
+#include "Joystick/Joystick.h"
 
 bool isConnected = false;
 SerialIO serialIO("/dev/ttyACM0", 115200);
 
+
 Message getMessage();
 
 int main() {
-    int fd;
+    Joystick joystick("/dev/input/js0");
+    double servoScale;
+    {
+        JoystickEvent joystickEvent;
+        servoScale = 100 / (double)joystickEvent.MAX_AXES_VALUE;
+    }
+
+    // Ensure that it was found and that we can use it
+    if (!joystick.isFound())
+    {
+        printf("open failed.\n");
+        exit(1);
+    }
 
     Message message = HELLO;
 
@@ -22,19 +38,85 @@ int main() {
                 message=ALREADY_CONNECTED;
     }
 
-    char msgToSend[] = {MOTOR, FORWARD, 13};
-    serialIO.Send(msgToSend, sizeof(msgToSend));
+    while (true) {
+        // Restrict rate
+        usleep(1000);
 
-    while (getMessage() != STRING){}
+        // Attempt to sample an event from the joystick
+        JoystickEvent event;
+        if (joystick.sample(&event))
+        {
+            if (event.isButton())
+            {
+                switch (event.number) {
+                    case 0: {
+                        if (event.value == 1) {
+                            char msgToSend[] = {MOTOR, STOP};
+                            serialIO.Send(msgToSend, sizeof(msgToSend));
+                        }
+                        break;
+                    }
+                    default: {
+                        break;
+                    }
+                }
+            }
+            else if (event.isAxis())
+            {
+                switch (event.number) {
+                    case 1: {
+                        char msgToSend[3];
+                        msgToSend[0] = MOTOR;
 
-    char servoToSend[] = {SERVO, LEFT, 99};
-    serialIO.Send(servoToSend, sizeof(servoToSend));
+                        if (event.value == 0) {
+                            msgToSend[1] = STOP;
+                            serialIO.Send(msgToSend, 2);
+                            break;
+                        } else if (event.value<0) {
+                            msgToSend[1] = FORWARD;
+                        } else {
+                            msgToSend[1] = REVERSE;
+                        }
 
-    while (getMessage() != STRING){}
+                        msgToSend[2] = 20;
+                        serialIO.Send(msgToSend, sizeof(msgToSend));
+                        break;
+                    }
+                    case 2: {
+                        char msgToSend[3];
+                        msgToSend[0] = SERVO;
+
+                        if (event.value == 0){
+                            msgToSend[1] = CENTER;
+                            serialIO.Send(msgToSend, 2);
+                            break;
+                        } else if (event.value > 0) {
+                            msgToSend[1] = RIGHT;
+                        } else {
+                            msgToSend[1] = LEFT;
+                        }
+
+
+                        short howFar = servoScale * abs(event.value);
+                        msgToSend[2] = howFar;
+
+                        serialIO.Send(msgToSend, sizeof(msgToSend));
+
+                        break;
+                    }
+                    default: {
+                        break;
+                    }
+                }
+            }
+        }
+        if (serialIO.BytesQued()>0)
+            getMessage();
+    }
 }
 
 Message getMessage() {
-    if (!serialIO.WaitForBytes(1, 100))
+    if (serialIO.BytesQued() <= 0)
         return ERROR;
 
     Message msgRecv = (Message)serialIO.Read();
@@ -63,7 +145,7 @@ Message getMessage() {
                     timeout = true;
             }
             if(timeout)
-                fprintf(stderr, "String from timedout\n", msgStr);
+                fprintf(stderr, "String from timedout, partial msg: %s\n", msgStr);
             else
                 fprintf(stdout, "String from ardunio: %s\n", msgStr);
             return STRING;

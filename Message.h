@@ -21,9 +21,12 @@ enum MotorCmd {
     ARM = 4
 };
 
+typedef enum MotorCmd MotorCmd;
+
 enum ServoCmd{
     CENTER = 1,
     LEFT = 2,
     RIGHT = 3
 };
 
+typedef enum  ServoCmd ServoCmd;
