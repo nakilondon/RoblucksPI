@@ -33,7 +33,7 @@ int main() {
 
     while (!isConnected){
         serialIO.Send(&message,1);
-        if(serialIO.WaitForBytes(1, 100))
+        if(serialIO.WaitForBytes(1, 1000))
             if(getMessage()==HELLO)
                 message=ALREADY_CONNECTED;
     }
@@ -99,6 +99,8 @@ int main() {
 
                         short howFar = servoScale * abs(event.value);
                         msgToSend[2] = howFar;
+
+                        fprintf(stdout, "Message to servo, cmd:%i, how far %u", msgToSend[1], msgToSend[2]);
 
                         serialIO.Send(msgToSend, sizeof(msgToSend));
 
