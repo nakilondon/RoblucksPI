@@ -3,10 +3,13 @@
 
 #include "SerialIO/SerialIO.h"
 #include "Joystick/Joystick.h"
+#include "parameters.h"
 
 bool isConnected = false;
-SerialIO serialIO("/dev/ttyACM0", 115200);
+SerialIO serialIO("/dev/ttyACM1", 115200);
 
+MotorCmd currentMotorCmd;
+short currentSpeed;
 
 Message getMessage();
 
@@ -53,6 +56,27 @@ int main() {
                         if (event.value == 1) {
                             char msgToSend[] = {MOTOR, STOP};
                             serialIO.Send(msgToSend, sizeof(msgToSend));
+                            currentMotorCmd = STOP;
+                        }
+                        break;
+                    }
+                    case 4: {
+                        if (event.value == 1){
+                            if (currentSpeed + SPEED_STEPS <= MAX_SPEED) {
+                                currentSpeed += SPEED_STEPS;
+                                char msgToSend[] = {MOTOR, (char)currentMotorCmd, (char)currentSpeed};
+                                serialIO.Send(msgToSend, sizeof(msgToSend));
+                            }
+                        }
+                        break;
+                    }
+                    case 5: {
+                        if (event.value == 1){
+                            if (currentSpeed - SPEED_STEPS >= START_SPEED) {
+                                currentSpeed -= SPEED_STEPS;
+                                char msgToSend[] = {MOTOR, (char)currentMotorCmd, (char)currentSpeed};
+                                serialIO.Send(msgToSend, sizeof(msgToSend));
+                            }
                         }
                         break;
                     }
@@ -65,21 +89,36 @@ int main() {
             {
                 switch (event.number) {
                     case 1: {
+                        bool sendCmd = false;
                         char msgToSend[3];
+
                         msgToSend[0] = MOTOR;
 
                         if (event.value == 0) {
-                            msgToSend[1] = STOP;
+                            currentMotorCmd = STOP;
+                            currentSpeed = START_SPEED;
+                            msgToSend[1] = currentMotorCmd;
                             serialIO.Send(msgToSend, 2);
                             break;
                         } else if (event.value<0) {
-                            msgToSend[1] = FORWARD;
+                            if (currentMotorCmd != FORWARD) {
+                                currentSpeed = START_SPEED;
+                                currentMotorCmd = FORWARD;
+                                sendCmd = true;
+                            }
                         } else {
-                            msgToSend[1] = REVERSE;
+                            if (currentMotorCmd != REVERSE) {
+                                currentSpeed = START_SPEED;
+                                currentMotorCmd = REVERSE;
+                                sendCmd = true;
+                            }
                         }
 
-                        msgToSend[2] = 20;
-                        serialIO.Send(msgToSend, sizeof(msgToSend));
+                        if (sendCmd) {
+                            msgToSend[1] = currentMotorCmd;
+                            msgToSend[2] = currentSpeed;
+                            serialIO.Send(msgToSend, sizeof(msgToSend));
+                        }
                         break;
                     }
                     case 2: {
@@ -96,13 +135,19 @@ int main() {
                             msgToSend[1] = LEFT;
                         }
 
+                        union {
+                            u_int16_t ui16;
+                            u_int8_t ui8[2];
+                        } howFar;
 
-                        short howFar = servoScale * abs(event.value);
-                        msgToSend[2] = howFar;
 
-                        fprintf(stdout, "Message to servo, cmd:%i, how far %u", msgToSend[1], msgToSend[2]);
+                        howFar.ui16 = static_cast<u_int16_t >(servoScale * abs(event.value) + 0.5);
 
-                        serialIO.Send(msgToSend, sizeof(msgToSend));
+                        msgToSend[2] = howFar.ui8[0];
+
+                        fprintf(stdout, "Message to servo, cmd:%i, how far %u\n", msgToSend[1], msgToSend[2]);
+
+                        serialIO.Send(msgToSend, 3);
 
                         break;
                     }
