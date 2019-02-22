@@ -1,12 +1,3 @@
-bin
-build_output
-debug
-obj
-*.swp
 .idea
-published
-*.user
-.vs
-GaussAdviser.sln.DotSettings.user
-appsettings.local.json
-envsettings.local.json
+cmake-build-debug-roblucks-pi-wifi
+cmake-build-debug
