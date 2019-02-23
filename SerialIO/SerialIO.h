@@ -23,7 +23,9 @@ public:
     bool Open();
 
     bool Send(const void *msg, size_t len);
-    int Read();
+    bool Send(std::string);
+    //int Read();
+    uint8_t Read();
     int BytesQued();
     bool WaitForBytes(int numBytes, unsigned long timeout);
 };

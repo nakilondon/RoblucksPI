@@ -6,12 +6,14 @@
 #include "parameters.h"
 
 bool isConnected = false;
-SerialIO serialIO("/dev/ttyACM1", 115200);
+SerialIO ardunioIO("/dev/ttyACM0", 115200);
+SerialIO nodeRedIO("/dev/pts/2", 115200);
 
 MotorCmd currentMotorCmd;
 short currentSpeed;
 
-Message getMessage();
+Message getMessageFromArdunio();
+void getMessageFromNodeRed();
 
 int main() {
     Joystick joystick("/dev/input/js0");
@@ -20,31 +22,36 @@ int main() {
         JoystickEvent joystickEvent;
         servoScale = 100 / (double)joystickEvent.MAX_AXES_VALUE;
     }
+    setbuf(stdout, 0);
 
     // Ensure that it was found and that we can use it
     if (!joystick.isFound())
     {
         printf("open failed.\n");
-        exit(1);
+       // exit(1);
     }
 
     Message message = HELLO;
 
-    if (!serialIO.Open()) {
+    if (!ardunioIO.Open()) {
         fprintf(stderr, "Unable to open serial port");
     }
 
+    if (!nodeRedIO.Open()) {
+        fprintf(stderr, "Unable to open Node-Red port");
+    }
+
     while (!isConnected){
-        serialIO.Send(&message,1);
-        if(serialIO.WaitForBytes(1, 1000))
-            if(getMessage()==HELLO)
+        ardunioIO.Send(&message,1);
+        if(ardunioIO.WaitForBytes(1, 1000))
+            if(getMessageFromArdunio()==HELLO)
                 message=ALREADY_CONNECTED;
     }
 
     while (true) {
         // Restrict rate
-        usleep(1000);
-
+        usleep(100);
+/*
         // Attempt to sample an event from the joystick
         JoystickEvent event;
         if (joystick.sample(&event))
@@ -55,7 +62,7 @@ int main() {
                     case 0: {
                         if (event.value == 1) {
                             char msgToSend[] = {MOTOR, STOP};
-                            serialIO.Send(msgToSend, sizeof(msgToSend));
+                            ardunioIO.Send(msgToSend, sizeof(msgToSend));
                             currentMotorCmd = STOP;
                         }
                         break;
@@ -65,7 +72,7 @@ int main() {
                             if (currentSpeed + SPEED_STEPS <= MAX_SPEED) {
                                 currentSpeed += SPEED_STEPS;
                                 char msgToSend[] = {MOTOR, (char)currentMotorCmd, (char)currentSpeed};
-                                serialIO.Send(msgToSend, sizeof(msgToSend));
+                                ardunioIO.Send(msgToSend, sizeof(msgToSend));
                             }
                         }
                         break;
@@ -75,7 +82,7 @@ int main() {
                             if (currentSpeed - SPEED_STEPS >= START_SPEED) {
                                 currentSpeed -= SPEED_STEPS;
                                 char msgToSend[] = {MOTOR, (char)currentMotorCmd, (char)currentSpeed};
-                                serialIO.Send(msgToSend, sizeof(msgToSend));
+                                ardunioIO.Send(msgToSend, sizeof(msgToSend));
                             }
                         }
                         break;
@@ -98,7 +105,7 @@ int main() {
                             currentMotorCmd = STOP;
                             currentSpeed = START_SPEED;
                             msgToSend[1] = currentMotorCmd;
-                            serialIO.Send(msgToSend, 2);
+                            ardunioIO.Send(msgToSend, 2);
                             break;
                         } else if (event.value<0) {
                             if (currentMotorCmd != FORWARD) {
@@ -117,7 +124,7 @@ int main() {
                         if (sendCmd) {
                             msgToSend[1] = currentMotorCmd;
                             msgToSend[2] = currentSpeed;
-                            serialIO.Send(msgToSend, sizeof(msgToSend));
+                            ardunioIO.Send(msgToSend, sizeof(msgToSend));
                         }
                         break;
                     }
@@ -127,7 +134,7 @@ int main() {
 
                         if (event.value == 0){
                             msgToSend[1] = CENTER;
-                            serialIO.Send(msgToSend, 2);
+                            ardunioIO.Send(msgToSend, 2);
                             break;
                         } else if (event.value > 0) {
                             msgToSend[1] = RIGHT;
@@ -147,7 +154,7 @@ int main() {
 
                         fprintf(stdout, "Message to servo, cmd:%i, how far %u\n", msgToSend[1], msgToSend[2]);
 
-                        serialIO.Send(msgToSend, 3);
+                        ardunioIO.Send(msgToSend, 3);
 
                         break;
                     }
@@ -157,16 +164,20 @@ int main() {
                 }
             }
         }
-        if (serialIO.BytesQued()>0)
-            getMessage();
+*/
+        if (ardunioIO.BytesQued()>0)
+            getMessageFromArdunio();
+
+        if (nodeRedIO.BytesQued()>0)
+            getMessageFromNodeRed();
     }
 }
 
-Message getMessage() {
-    if (serialIO.BytesQued() <= 0)
+Message getMessageFromArdunio() {
+    if (ardunioIO.BytesQued() <= 0)
         return ERROR;
 
-    Message msgRecv = (Message)serialIO.Read();
+    Message msgRecv = (Message)ardunioIO.Read();
 
     switch (msgRecv) {
         case HELLO:{
@@ -175,27 +186,41 @@ Message getMessage() {
             break;
         }
 
-        case STRING: {
-            char msgStr[100] = {0};
-            int i = 0;
-            bool timeout = false;
-            while (i < sizeof(msgStr) && msgStr[i] != '\n' && msgStr[i] != '\r' && !timeout ) {
-               if(serialIO.WaitForBytes(1, 10000)) {
-                    msgStr[i] = serialIO.Read();
-                    if (msgStr[i] == '\n' || msgStr[i] == '\r') {
-                        msgStr[i + 1] = 0;
-                    } else {
-                        i++;
-                    }
+        case LOG: {
+            if (ardunioIO.WaitForBytes(1, 100)) {
+                LogLevel logLevel = (LogLevel)ardunioIO.Read();
+                std::string msgStr;
+                int i = 0;
+                bool timeout = false;
+                bool msgEnd = false;
+
+                while (!msgEnd && !timeout) {
+                    if (ardunioIO.WaitForBytes(1, 10000)) {
+                        msgStr += ardunioIO.Read();
+                        if (msgStr.c_str()[i] == '\n' || msgStr.c_str()[i] == '\r') {
+                            msgEnd = true;
+                        } else {
+                            i++;
+                        }
+                    } else
+                        timeout = true;
                 }
-                else
-                    timeout = true;
+                if (timeout)
+                    fprintf(stderr, "String from timedout, partial msg: %s\n", msgStr.c_str());
+                else {
+                    auto logLevelInt = static_cast<int>(logLevel);
+                    std::string msgOut = "{ \"type\":\"log\", ";
+                    msgOut += "\"source\":\"Arduino\", ";
+                //    msgOut += "\"LogLevel\":";
+                //    msgOut += toascii(logLevelInt);
+                    msgOut += "\"msg\":\"";
+                    msgOut += msgStr.substr(0,i-1).c_str();
+                    msgOut += "\" }\n";
+
+                    nodeRedIO.Send(msgOut);
+                }
             }
-            if(timeout)
-                fprintf(stderr, "String from timedout, partial msg: %s\n", msgStr);
-            else
-                fprintf(stdout, "String from ardunio: %s\n", msgStr);
-            return STRING;
+            return LOG;
             break;
         }
         case SERVO:{
@@ -233,3 +258,33 @@ Message getMessage() {
     return ERROR;
 }
 
+void getMessageFromNodeRed() {
+    if (nodeRedIO.BytesQued() <= 0)
+        return;
+
+    char msgStr[100] = {0};
+    int i = 0;
+    bool timeout = false;
+
+    while (i < sizeof(msgStr) && msgStr[i] != '\n' && msgStr[i] != '\r' && !timeout) {
+        if (nodeRedIO.WaitForBytes(1, 10000)) {
+            msgStr[i] = nodeRedIO.Read();
+            if (msgStr[i] == '\n' || msgStr[i] == '\r') {
+                msgStr[i + 1] = 0;
+            } else {
+                i++;
+            }
+        } else
+            timeout = true;
+    }
+
+    if (timeout)
+        fprintf(stderr, "String from Node-Red timedout, partial msg: %s\n", msgStr);
+    else {
+
+        fprintf(stdout, "Message from Node-Red: %s\n", msgStr);
+
+    }
+
+
+}
