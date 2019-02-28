@@ -9,7 +9,7 @@ enum Message {
     ALREADY_CONNECTED = 4,
     ERROR = 5,
     RECEIVED = 6,
-    STRING = 7
+    LOG = 7
 };
 
 typedef enum Message Message;
@@ -30,3 +30,12 @@ enum ServoCmd{
 };
 
 typedef enum  ServoCmd ServoCmd;
+
+enum LogLevel {
+    LOG_DEBUG = 0,
+    LOG_INFO = 1,
+    LOG_WARNING = 2,
+    LOG_ERROR = 3,
+    LOG_CRITICAL = 4
+};
+

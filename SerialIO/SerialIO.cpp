@@ -55,12 +55,21 @@ bool SerialIO::Send(const void *msg, size_t len) {
     return wLen == len;
 }
 
+bool SerialIO::Send(std::string msg) {
+    return Send(msg.c_str(), msg.length());
+}
+/*
 int SerialIO::Read() {
     uint8_t x;
     if (read(_handle, &x,1) != 1)
         return -1;
 
     return ((int)x) & 0xFF;
+}*/
+uint8_t SerialIO::Read() {
+    uint8_t x;
+    read(_handle, &x, 1);
+    return x;
 }
 
 int SerialIO::BytesQued() {
