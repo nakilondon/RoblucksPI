@@ -6,8 +6,8 @@
 #include "parameters.h"
 
 bool isConnected = false;
-SerialIO ardunioIO("/dev/ttyACM0", 115200);
-SerialIO nodeRedIO("/dev/pts/2", 115200);
+SerialIO ardunioIO("/dev/arduino-roblucks", 115200);
+SerialIO nodeRedIO("/dev/tnt1", 115200);
 
 MotorCmd currentMotorCmd;
 short currentSpeed;
@@ -27,18 +27,20 @@ int main() {
     // Ensure that it was found and that we can use it
     if (!joystick.isFound())
     {
-        printf("open failed.\n");
-       // exit(1);
+        fprintf(stderr, "Joystick open failed.\n");
+        exit(1);
     }
 
     Message message = HELLO;
 
     if (!ardunioIO.Open()) {
-        fprintf(stderr, "Unable to open serial port");
+        fprintf(stderr, "Unable to open serial port\n");
+        exit(1);
     }
 
     if (!nodeRedIO.Open()) {
-        fprintf(stderr, "Unable to open Node-Red port");
+        fprintf(stderr, "Unable to open Node-Red port\n");
+        exit(1);
     }
 
     while (!isConnected){
@@ -51,7 +53,7 @@ int main() {
     while (true) {
         // Restrict rate
         usleep(100);
-/*
+
         // Attempt to sample an event from the joystick
         JoystickEvent event;
         if (joystick.sample(&event))
@@ -164,7 +166,6 @@ int main() {
                 }
             }
         }
-*/
         if (ardunioIO.BytesQued()>0)
             getMessageFromArdunio();
 
@@ -188,33 +189,30 @@ Message getMessageFromArdunio() {
 
         case LOG: {
             if (ardunioIO.WaitForBytes(1, 100)) {
-                LogLevel logLevel = (LogLevel)ardunioIO.Read();
+                std::string logLevel;
+                logLevel = ardunioIO.Read();
                 std::string msgStr;
-                int i = 0;
                 bool timeout = false;
                 bool msgEnd = false;
 
                 while (!msgEnd && !timeout) {
                     if (ardunioIO.WaitForBytes(1, 10000)) {
                         msgStr += ardunioIO.Read();
-                        if (msgStr.c_str()[i] == '\n' || msgStr.c_str()[i] == '\r') {
-                            msgEnd = true;
-                        } else {
-                            i++;
-                        }
+                        if (msgStr.length()>2)
+                            if (msgStr.substr(msgStr.length()-2,2)=="\r\n")
+                                msgEnd = true;
                     } else
                         timeout = true;
                 }
                 if (timeout)
                     fprintf(stderr, "String from timedout, partial msg: %s\n", msgStr.c_str());
                 else {
-                    auto logLevelInt = static_cast<int>(logLevel);
                     std::string msgOut = "{ \"type\":\"log\", ";
                     msgOut += "\"source\":\"Arduino\", ";
-                //    msgOut += "\"LogLevel\":";
-                //    msgOut += toascii(logLevelInt);
-                    msgOut += "\"msg\":\"";
-                    msgOut += msgStr.substr(0,i-1).c_str();
+                    msgOut += "\"LogLevel\":";
+                    msgOut += logLevel +",";
+                    msgOut += "\"msgDetail\":\"";
+                    msgOut += msgStr.substr(0,msgStr.length()-2);
                     msgOut += "\" }\n";
 
                     nodeRedIO.Send(msgOut);
@@ -250,7 +248,7 @@ Message getMessageFromArdunio() {
             break;
         }
         default: {
-            fprintf(stdout, "Unkown message from ardunio\n");
+            fprintf(stdout, "Unknown message from ardunio\n");
             break;
         }
 
@@ -285,6 +283,4 @@ void getMessageFromNodeRed() {
         fprintf(stdout, "Message from Node-Red: %s\n", msgStr);
 
     }
-
-
 }
