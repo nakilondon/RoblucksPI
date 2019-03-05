@@ -1,18 +1,21 @@
 //
 // Created by james on 16/02/19.
 //
+#ifndef ROBLUCKSPI_MESSAGE_H
+#define ROBLUCKSPI_MESSAGE_H
 
 enum Message {
     HELLO = 1,
     SERVO = 2,
     MOTOR = 3,
     ALREADY_CONNECTED = 4,
-    ERROR = 5,
-    RECEIVED = 6,
+    DISTANCE = 5,
+    ERROR = 6,
+   // RECEIVED = 6,
     LOG = 7
 };
 
-typedef enum Message Message;
+//typedef enum Message Message;
 
 enum MotorCmd {
     FORWARD = 1,
@@ -21,7 +24,7 @@ enum MotorCmd {
     ARM = 4
 };
 
-typedef enum MotorCmd MotorCmd;
+//typedef enum MotorCmd MotorCmd;
 
 enum ServoCmd{
     CENTER = 1,
@@ -29,7 +32,7 @@ enum ServoCmd{
     RIGHT = 3
 };
 
-typedef enum  ServoCmd ServoCmd;
+//typedef enum  ServoCmd ServoCmd;
 
 enum LogLevel {
     LOG_DEBUG = 0,
@@ -39,3 +42,11 @@ enum LogLevel {
     LOG_CRITICAL = 4
 };
 
+enum Direction {
+    DIRECTION_FRONT = 1,
+    DIRECTION_BACK = 2,
+    DIRECTION_LEFT = 3,
+    DIRECTION_RIGHT = 4,
+};
+
+#endif

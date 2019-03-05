@@ -2,26 +2,43 @@
 #include <unistd.h>
 
 #include "SerialIO/SerialIO.h"
-#include "Joystick/Joystick.h"
+//#include "Joystick/Joystick.h"
 #include "parameters.h"
+#include <list>
+#include "Joystick/RoblucksJoystick.h"
+#include "ManualControl/ManualControl.h"
+#include "AutonomousControl/AutonomousControl.h"
+/*
+enum Adjustment {
+    NONE,
+    ADJUST_LEFT,
+    ADJUST_RIGHT,
+    TURNING_LEFT,
+    TURNING_RIGHT
+};*/
 
 bool isConnected = false;
+Adjustment adjustingPosition = NONE;
 SerialIO ardunioIO("/dev/arduino-roblucks", 115200);
 SerialIO nodeRedIO("/dev/tnt1", 115200);
+Mode currentMode = DEFAULT_MODE;
+
+struct distances {
+    time_t recived;
+    short distance;
+};
+
+std::list<uint8_t > leftDistances;
+std::list<uint8_t > rightDistances;
 
 MotorCmd currentMotorCmd;
-short currentSpeed;
+uint8_t currentSpeed;
 
 Message getMessageFromArdunio();
 void getMessageFromNodeRed();
 
 int main() {
     Joystick joystick("/dev/input/js0");
-    double servoScale;
-    {
-        JoystickEvent joystickEvent;
-        servoScale = 100 / (double)joystickEvent.MAX_AXES_VALUE;
-    }
     setbuf(stdout, 0);
 
     // Ensure that it was found and that we can use it
@@ -54,118 +71,16 @@ int main() {
         // Restrict rate
         usleep(100);
 
-        // Attempt to sample an event from the joystick
-        JoystickEvent event;
-        if (joystick.sample(&event))
-        {
-            if (event.isButton())
-            {
-                switch (event.number) {
-                    case 0: {
-                        if (event.value == 1) {
-                            char msgToSend[] = {MOTOR, STOP};
-                            ardunioIO.Send(msgToSend, sizeof(msgToSend));
-                            currentMotorCmd = STOP;
-                        }
-                        break;
-                    }
-                    case 4: {
-                        if (event.value == 1){
-                            if (currentSpeed + SPEED_STEPS <= MAX_SPEED) {
-                                currentSpeed += SPEED_STEPS;
-                                char msgToSend[] = {MOTOR, (char)currentMotorCmd, (char)currentSpeed};
-                                ardunioIO.Send(msgToSend, sizeof(msgToSend));
-                            }
-                        }
-                        break;
-                    }
-                    case 5: {
-                        if (event.value == 1){
-                            if (currentSpeed - SPEED_STEPS >= START_SPEED) {
-                                currentSpeed -= SPEED_STEPS;
-                                char msgToSend[] = {MOTOR, (char)currentMotorCmd, (char)currentSpeed};
-                                ardunioIO.Send(msgToSend, sizeof(msgToSend));
-                            }
-                        }
-                        break;
-                    }
-                    default: {
-                        break;
-                    }
-                }
-            }
-            else if (event.isAxis())
-            {
-                switch (event.number) {
-                    case 1: {
-                        bool sendCmd = false;
-                        char msgToSend[3];
+        int movement = 0;
+        auto joystickType = RoblucksJoystick::checkJoystick(movement, &joystick);
 
-                        msgToSend[0] = MOTOR;
-
-                        if (event.value == 0) {
-                            currentMotorCmd = STOP;
-                            currentSpeed = START_SPEED;
-                            msgToSend[1] = currentMotorCmd;
-                            ardunioIO.Send(msgToSend, 2);
-                            break;
-                        } else if (event.value<0) {
-                            if (currentMotorCmd != FORWARD) {
-                                currentSpeed = START_SPEED;
-                                currentMotorCmd = FORWARD;
-                                sendCmd = true;
-                            }
-                        } else {
-                            if (currentMotorCmd != REVERSE) {
-                                currentSpeed = START_SPEED;
-                                currentMotorCmd = REVERSE;
-                                sendCmd = true;
-                            }
-                        }
-
-                        if (sendCmd) {
-                            msgToSend[1] = currentMotorCmd;
-                            msgToSend[2] = currentSpeed;
-                            ardunioIO.Send(msgToSend, sizeof(msgToSend));
-                        }
-                        break;
-                    }
-                    case 2: {
-                        char msgToSend[3];
-                        msgToSend[0] = SERVO;
-
-                        if (event.value == 0){
-                            msgToSend[1] = CENTER;
-                            ardunioIO.Send(msgToSend, 2);
-                            break;
-                        } else if (event.value > 0) {
-                            msgToSend[1] = RIGHT;
-                        } else {
-                            msgToSend[1] = LEFT;
-                        }
-
-                        union {
-                            u_int16_t ui16;
-                            u_int8_t ui8[2];
-                        } howFar;
-
-
-                        howFar.ui16 = static_cast<u_int16_t >(servoScale * abs(event.value) + 0.5);
-
-                        msgToSend[2] = howFar.ui8[0];
-
-                        fprintf(stdout, "Message to servo, cmd:%i, how far %u\n", msgToSend[1], msgToSend[2]);
-
-                        ardunioIO.Send(msgToSend, 3);
-
-                        break;
-                    }
-                    default: {
-                        break;
-                    }
-                }
-            }
+        if (joystickType != joyNone) {
+            if (currentMode = MANUAL)
+                ManualControl::joystickCommand(joystickType, movement, &ardunioIO, currentSpeed, currentMotorCmd);
+            else
+                AutonomousControl::joystickCommand(joystickType, movement, &ardunioIO, currentSpeed, currentMotorCmd);
         }
+
         if (ardunioIO.BytesQued()>0)
             getMessageFromArdunio();
 
@@ -221,6 +136,82 @@ Message getMessageFromArdunio() {
             return LOG;
             break;
         }
+        case DISTANCE:{
+            AutonomousControl::processDistance(&ardunioIO, currentSpeed, currentMotorCmd,
+                    adjustingPosition, leftDistances, rightDistances);
+            /*Direction direction = static_cast<Direction >(ardunioIO.Read());
+            uint8_t measure = ardunioIO.Read();
+
+            if (direction == DIRECTION_LEFT || direction == DIRECTION_RIGHT){
+                uint8_t leftDistance;
+                uint8_t rightDistance;
+                if(direction==DIRECTION_LEFT) {
+                    leftDistances.push_front(measure);
+                    leftDistance = measure;
+                    if (rightDistances.empty())
+                        return DISTANCE;
+                    rightDistance = rightDistances.front();
+                    rightDistances.pop_back();
+
+                } else {
+                    rightDistances.push_front(measure);
+                    rightDistance = measure;
+                    if (leftDistances.empty())
+                        return DISTANCE;
+                    leftDistance = leftDistances.front();
+                    leftDistances.pop_back();
+                }
+
+                auto totalLength = rightDistance + leftDistance;
+                auto difference = abs(rightDistance - leftDistance);
+                auto middel = totalLength /2;
+
+                switch (adjustingPosition) {
+                    case NONE: {
+                        if (difference >= middel * 0.2) {
+                            char messageToSend[3] = {SERVO};
+                            if ((currentMotorCmd == FORWARD && rightDistance < leftDistance) ||
+                                currentMotorCmd == REVERSE && rightDistance > leftDistance) {
+                                messageToSend[1] = LEFT;
+                                adjustingPosition = ADJUST_LEFT;
+                            //    double servoDistance = abs(middel - leftDistance);
+                            //    servoDistance = servoDistance / middel;
+                            //    servoDistance = servoDistance * 100;
+                            //    messageToSend[2] = static_cast<uint8_t>(servoDistance);
+                            } else {
+                                messageToSend[1] = RIGHT;
+                                adjustingPosition = ADJUST_RIGHT;
+                              //  double servoDistance = abs(middel - rightDistance);
+                              //  servoDistance = servoDistance / middel;
+                              //  servoDistance = servoDistance * 100;
+                              //  messageToSend[2] = static_cast<uint8_t>(servoDistance);
+                            }
+                            messageToSend[2] = 50;
+                            ardunioIO.Send(messageToSend, sizeof(messageToSend));
+                        }
+                        break;
+                    }
+
+                    case ADJUST_LEFT:
+                    case ADJUST_RIGHT: {
+                        if (difference <= middel *.1) {
+                            char messageToSend[] = {SERVO, CENTER};
+                            ardunioIO.Send(messageToSend, sizeof(messageToSend));
+                            adjustingPosition = NONE;
+                        }
+                        break;
+                    }
+                }
+            }
+
+            if (DIRECTION_FRONT && measure <= 5 && measure > 0){
+                char messageToSend[] = {MOTOR,STOP};
+                ardunioIO.Send(messageToSend, sizeof(messageToSend));
+
+            }*/
+            return DISTANCE;
+            break;
+        }
         case SERVO:{
             fprintf(stdout, "SERVO message from ardunio\n");
             return SERVO;
@@ -237,16 +228,7 @@ Message getMessageFromArdunio() {
             return ALREADY_CONNECTED;
             break;
         }
-        case ERROR:{
-            fprintf(stdout, "ERROR message from ardunio\n");
-            return ERROR;
-            break;
-        }
-        case RECEIVED:{
-            fprintf(stdout, "RECEIVED message from ardunio\n");
-            return RECEIVED;
-            break;
-        }
+
         default: {
             fprintf(stdout, "Unknown message from ardunio\n");
             break;
