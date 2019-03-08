@@ -23,15 +23,12 @@ enum JoystickType {
 };
 
 class RoblucksJoystick {
-
 private:
     static constexpr double _servoScale  = 100 / (double)JoystickEvent::MAX_AXES_VALUE;
-
-    static Joystick *_joystick;
+    Joystick _joystick;
 
 public:
-
-    static JoystickType checkJoystick(int &movement, Joystick *joystick);
+    JoystickType checkJoystick(int &movement);
 };
 
 

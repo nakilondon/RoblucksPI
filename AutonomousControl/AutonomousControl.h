@@ -10,7 +10,9 @@
 #include "../Joystick/Joystick.h"
 #include "../Joystick/RoblucksJoystick.h"
 #include "../SerialIO/SerialIO.h"
+#include "../ControlServoMotor/ControlServoMotor.h"
 #include <list>
+#include "../Timer.h"
 
 enum Adjustment {
     NONE,
@@ -21,18 +23,17 @@ enum Adjustment {
 };
 
 class AutonomousControl {
-    /*
+
 private:
-    static Adjustment _adjustment;
-    static std::list<uint8_t > _leftDistances;
-    static std::list<uint8_t > _rightDistances;
-*/
+    std::list<uint8_t > _leftDistances;
+    std::list<uint8_t > _rightDistances;
+    std::list<uint8_t> _frontDistances;
+    uint8_t _stopingCnt = 0;
+    bool checkForTurn(ControlServoMotor &controlServoMotor, int totalLength, int rightDistance, int leftDistance);
+
 public:
-    static void joystickCommand(JoystickType joystickType, int movement, SerialIO *ardunioIO, uint8_t &currentSpeed, MotorCmd &currentMotorCmd);
-    static void processDistance(SerialIO *ardunioIO, uint8_t &currentSpeed, MotorCmd &currentMotorCmd, Adjustment &adjustment,
-            std::list<uint8_t> &leftDistances, std::list<uint8_t> &rightDistances);
-
-
+    void joystickCommand(JoystickType joystickType, ControlServoMotor &controlServoMotor);
+    void processDistance(Direction direction, uint8_t measure, ControlServoMotor &controlServoMotor, Mode *currentMode);
 };
 
 

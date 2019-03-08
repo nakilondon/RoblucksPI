@@ -9,16 +9,16 @@
 #include "../Joystick/Joystick.h"
 #include "../SerialIO/SerialIO.h"
 #include "../Message.h"
+#include "../ControlServoMotor/ControlServoMotor.h"
 
 
 class ManualControl {
 
 private:
-    //static uint8_t _currentSpeed;
-    //static MotorCmd _currentMotorCmd;
 
 public:
-    static void joystickCommand(JoystickType joystickType, int movement, SerialIO *ardunioIO, uint8_t &currentSpeed, MotorCmd &currentMotorCmd);
+    void joystickCommand(JoystickType joystickType, int movement, ControlServoMotor &controlServoMotor);
+
 
 };
 

@@ -3,23 +3,21 @@
 //
 
 #include "AutonomousControl.h"
+#include <chrono>
+#include <cstdint>
+#include <inttypes.h>
 
-void AutonomousControl::joystickCommand(JoystickType joystickType, int movement, SerialIO *ardunioIO,
-                                        uint8_t &currentSpeed, MotorCmd &currentMotorCmd) {
+void AutonomousControl::joystickCommand(JoystickType joystickType, ControlServoMotor &controlServoMotor) {
 
     switch (joystickType){
         case joyStop:{
-            char msgToSend[] = {MOTOR, STOP};
-            ardunioIO->Send(msgToSend, sizeof(msgToSend));
-            currentSpeed = 0;
-            currentMotorCmd = STOP;
+            controlServoMotor.request(cntlStop);
             break;
         }
         case joyStart:{
-            char msgToSend[] = {MOTOR, FORWARD, START_SPEED};
-            ardunioIO->Send(msgToSend, sizeof(msgToSend));
-            currentMotorCmd = FORWARD;
-            currentSpeed = START_SPEED;
+            controlServoMotor.request(cntlCenter);
+            controlServoMotor.request(cntlStart);
+            _stopingCnt = 0;
             break;
         }
         default:{
@@ -28,76 +26,107 @@ void AutonomousControl::joystickCommand(JoystickType joystickType, int movement,
     }
 }
 
-void AutonomousControl::processDistance(SerialIO *ardunioIO, uint8_t &currentSpeed, MotorCmd &currentMotorCmd,
-        Adjustment &adjustment, std::list<uint8_t> &leftDistances, std::list<uint8_t> &rightDistances) {
+void AutonomousControl::processDistance(Direction direction, uint8_t measure, ControlServoMotor &controlServoMotor, Mode *currentMode) {
 
-    Direction direction = static_cast<Direction >(ardunioIO->Read());
-    uint8_t measure = ardunioIO->Read();
+    if (*currentMode != AUTONOMOUS)
+        return;
+
+    if (controlServoMotor.direction() != FORWARD &&
+        controlServoMotor.direction() != REVERSE &&
+        controlServoMotor.processingServoRqst() != servoTurnRight &&
+        controlServoMotor.processingServoRqst() != servoTurnLeft)
+        return;
 
     if (direction == DIRECTION_LEFT || direction == DIRECTION_RIGHT) {
         uint8_t leftDistance;
         uint8_t rightDistance;
         if (direction == DIRECTION_LEFT) {
-            leftDistances.push_front(measure);
+            _leftDistances.push_front(measure);
             leftDistance = measure;
-            if (rightDistances.empty())
+            if (_rightDistances.empty())
                 return;
-            rightDistance = rightDistances.front();
-            rightDistances.pop_back();
+            rightDistance = _rightDistances.front();
+
+            if (_rightDistances.size() > 10)
+                _rightDistances.pop_back();
 
         } else {
-            rightDistances.push_front(measure);
+            _rightDistances.push_front(measure);
             rightDistance = measure;
-            if (leftDistances.empty())
+            if (_leftDistances.empty())
                 return;
-            leftDistance = leftDistances.front();
-            leftDistances.pop_back();
+            leftDistance = _leftDistances.front();
+            if (_leftDistances.size() > 10)
+                _leftDistances.pop_back();
         }
-
         auto totalLength = rightDistance + leftDistance;
+
+        if (checkForTurn(controlServoMotor, totalLength, rightDistance, leftDistance))
+            return;
+
         auto difference = abs(rightDistance - leftDistance);
-        auto middel = totalLength / 2;
 
-        switch (adjustment) {
-            case NONE: {
-                if (difference >= middel * 0.2) {
-                    char messageToSend[3] = {SERVO};
-                    if ((currentMotorCmd == FORWARD && rightDistance < leftDistance) ||
-                        currentMotorCmd == REVERSE && rightDistance > leftDistance) {
-                        messageToSend[1] = LEFT;
-                        adjustment = ADJUST_LEFT;
-//    double servoDistance = abs(middel - leftDistance);
-//    servoDistance = servoDistance / middel;
-//    servoDistance = servoDistance * 100;
-//    messageToSend[2] = static_cast<uint8_t>(servoDistance);
-                    } else {
-                        messageToSend[1] = RIGHT;
-                        adjustment = ADJUST_RIGHT;
-//  double servoDistance = abs(middel - rightDistance);
-//  servoDistance = servoDistance / middel;
-//  servoDistance = servoDistance * 100;
-//  messageToSend[2] = static_cast<uint8_t>(servoDistance);
-                    }
-                    messageToSend[2] = 50;
-                    ardunioIO->Send(messageToSend, sizeof(messageToSend));
-                }
-                break;
-            }
+        ControlType cntlType;
 
-            case ADJUST_LEFT:
-            case ADJUST_RIGHT: {
-                if (difference <= middel * .1) {
-                    char messageToSend[] = {SERVO, CENTER};
-                    ardunioIO->Send(messageToSend, sizeof(messageToSend));
-                    adjustment = NONE;
-                }
-                break;
+        if (difference / totalLength > 0.3) {
+            if ((controlServoMotor.direction() == FORWARD && rightDistance < leftDistance) ||
+                controlServoMotor.direction() == REVERSE && rightDistance > leftDistance) {
+                cntlType = cntlAdjustLeft;
+                _leftDistances.pop_front();
+            } else {
+                cntlType = cntlAdjustRight;
+                _rightDistances.pop_front();
             }
+            controlServoMotor.request(cntlType);
+
+        } else if (difference <= 0.2) {
+            controlServoMotor.request(cntlCenter);
         }
     }
 
-    if (DIRECTION_FRONT && measure <= 5 && measure > 0) {
-        char messageToSend[] = {MOTOR, STOP};
-        ardunioIO->Send(messageToSend, sizeof(messageToSend));
+    if (DIRECTION_FRONT && measure > 0) {
+        _frontDistances.push_front(measure);
+        if (_frontDistances.size()>10)
+            _frontDistances.pop_back();
+        if (measure <= 8) {
+            _stopingCnt++;
+            fprintf(stdout, "Stopping distance: %d, count: %d\n", measure, _stopingCnt);
+          //  if(_stopingCnt>1)
+                controlServoMotor.request(cntlStop);
+        } else
+            _stopingCnt = 0;
     }
+}
+
+bool AutonomousControl::checkForTurn(ControlServoMotor &controlServoMotor, int totalLength, int rightDistance, int leftDistance) {
+    if (_rightDistances.size() > 5 && _leftDistances.size() > 5) {
+
+        int frontDistance = 200;
+        if (!_frontDistances.empty())
+            frontDistance = _frontDistances.front();
+
+        int totalRight = 0;
+        int totalLeft = 0;
+        std::list<uint8_t>::iterator it;
+
+        for (it = _rightDistances.begin(); it != _rightDistances.end(); it++)
+            totalRight += *it;
+
+        for (it = _leftDistances.begin(); it != _leftDistances.end(); it++)
+            totalLeft += *it;
+
+        auto rightAverage = totalRight / _rightDistances.size();
+        auto leftAverage = totalLeft / _leftDistances.size();
+
+        if (totalLength > (rightAverage + leftAverage) * 1.4 ) {
+            fprintf(stdout, "total len: %d, right Average: %d, leftAverage %d, front %d\n", totalLength, rightAverage,
+                    leftAverage, frontDistance);
+            if (rightDistance > leftDistance)
+                controlServoMotor.request(cntlTurnRight);
+            else
+                controlServoMotor.request(cntlTurnLeft);
+            return true;
+        }
+    }
+    return false;
 }

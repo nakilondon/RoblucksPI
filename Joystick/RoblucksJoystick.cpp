@@ -4,11 +4,11 @@
 
 #include "RoblucksJoystick.h"
 
-JoystickType RoblucksJoystick::checkJoystick(int &movement, Joystick *joystick) {
+JoystickType RoblucksJoystick::checkJoystick(int &movement) {
     JoystickEvent event;
     movement = 0;
 
-    if (joystick->sample(&event)) {
+    if (_joystick.sample(&event)) {
         if (event.isButton()) {
             switch (event.number) {
                 case 0: {

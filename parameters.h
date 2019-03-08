@@ -9,7 +9,7 @@
 #define SPEED_STEPS           5
 #define MAX_SPEED            40
 
-#define DEFAULT_MODE    AUTONOMOUS
+#define DEFAULT_MODE   AUTONOMOUS
 
 enum Mode {
     MANUAL,
