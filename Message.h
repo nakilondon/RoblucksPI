@@ -10,11 +10,17 @@ enum Message {
     MOTOR = 3,
     ALREADY_CONNECTED = 4,
     DISTANCE = 5,
-    ERROR = 6,
+    OPERATION = 6,
    // RECEIVED = 6,
-    LOG = 7
+    LOG = 7,
+    ERROR = 8
 };
 
+enum Operation {
+    SET_LOG_LEVEL = 1,
+    TURN_DISTANCES_OFF = 2,
+    TURN_DISTANCES_ON = 3
+};
 //typedef enum Message Message;
 
 enum MotorCmd {
@@ -34,19 +40,13 @@ enum ServoCmd{
 
 //typedef enum  ServoCmd ServoCmd;
 
-enum LogLevel {
-    LOG_DEBUG = 0,
-    LOG_INFO = 1,
-    LOG_WARNING = 2,
-    LOG_ERROR = 3,
-    LOG_CRITICAL = 4
-};
 
-enum Direction {
-    DIRECTION_FRONT = 1,
-    DIRECTION_BACK = 2,
-    DIRECTION_LEFT = 3,
-    DIRECTION_RIGHT = 4,
+enum DistanceSensor {
+    SENSOR_FRONT = 1,
+    SENSOR_BACK = 2,
+    SENSOR_LEFT = 3,
+    SENSOR_RIGHT = 4,
+
 };
 
 #endif

@@ -6,17 +6,18 @@
 #include "Joystick/RoblucksJoystick.h"
 #include "ManualControl/ManualControl.h"
 #include "AutonomousControl/AutonomousControl.h"
-#include "ControlServoMotor/ControlServoMotor.h"
+#include "Controls/ControlServo.h"
+#include "Utils/json.hpp"
+#include "Utils/Log.h"
+
+using json = nlohmann::json;
 
 bool isConnected = false;
 SerialIO ardunioIO("/dev/arduino-roblucks", 115200);
 SerialIO nodeRedIO("/dev/tnt1", 115200);
-AutonomousControl autonomousControl;
 Mode currentMode = DEFAULT_MODE;
-ManualControl manualControl;
-ControlServoMotor controlServoMotor;
-
 Message getMessageFromArdunio();
+
 void getMessageFromNodeRed();
 
 int main() {
@@ -26,16 +27,18 @@ int main() {
     Message message = HELLO;
 
     if (!ardunioIO.Open()) {
-        fprintf(stderr, "Unable to open serial port\n");
+        Log::logMessage(PI, LOG_CRITICAL, "Unable to open Arduino port");
         exit(1);
     }
 
     if (!nodeRedIO.Open()) {
-        fprintf(stderr, "Unable to open Node-Red port\n");
+        Log::logMessage(PI, LOG_CRITICAL, "Unable to open Node-Red port");
         exit(1);
     }
 
-   controlServoMotor.setArduino(&ardunioIO);
+    ControlServo::setArduino(&ardunioIO);
+    ControlMotor::setArduino(&ardunioIO);
+    Log::setNodeRed(&nodeRedIO);
 
     while (!isConnected){
         ardunioIO.Send(&message,1);
@@ -43,6 +46,12 @@ int main() {
             if(getMessageFromArdunio()==HELLO)
                 message=ALREADY_CONNECTED;
     }
+
+    if (currentMode != AUTONOMOUS) {
+        char msgToSend[] = {OPERATION, TURN_DISTANCES_OFF};
+        ardunioIO.Send(msgToSend, sizeof(msgToSend));
+    }
+
 
     while (true) {
         // Restrict rate
@@ -53,9 +62,9 @@ int main() {
 
         if (joystickType != joyNone) {
             if (currentMode == MANUAL)
-                manualControl.joystickCommand(joystickType, movement, controlServoMotor);
+                ManualControl::joystickCommand(joystickType, movement);
             else
-                autonomousControl.joystickCommand(joystickType, controlServoMotor);
+                AutonomousControl::joystickCommand(joystickType);
         }
 
         if (ardunioIO.BytesQued()>0)
@@ -74,7 +83,7 @@ Message getMessageFromArdunio() {
 
     switch (msgRecv) {
         case HELLO:{
-            fprintf(stdout, "Connected\n");
+            Log::logMessage(PI, LOG_INFO, "Connected");
             return HELLO;
             break;
         }
@@ -97,50 +106,48 @@ Message getMessageFromArdunio() {
                         timeout = true;
                 }
                 if (timeout)
-                    fprintf(stderr, "String from timedout, partial msg: %s\n", msgStr.c_str());
+                    Log::logMessage(PI, LOG_ERROR, "String from timedout, partial msg: " + msgStr);
                 else {
-                    std::string msgOut = "{ \"type\":\"log\", ";
-                    msgOut += "\"source\":\"Arduino\", ";
-                    msgOut += "\"LogLevel\":";
-                    msgOut += logLevel +",";
-                    msgOut += "\"msgDetail\":\"";
-                    msgOut += msgStr.substr(0,msgStr.length()-2);
-                    msgOut += "\" }\n";
-
-                    nodeRedIO.Send(msgOut);
+                    Log::logMessage(ARDUINO, logLevel, msgStr.substr(0,msgStr.length()-2));
                 }
             }
             return LOG;
             break;
         }
         case DISTANCE:{
-            Direction direction = static_cast<Direction >(ardunioIO.Read());
+            DistanceSensor direction = static_cast<DistanceSensor >(ardunioIO.Read());
             uint8_t measure = ardunioIO.Read();
 
-            autonomousControl.processDistance(direction, measure, controlServoMotor, &currentMode);
+            if (currentMode==AUTONOMOUS)
+                AutonomousControl::processDistance(direction, measure);
+            else {
+                char msgToSend[] = {OPERATION, TURN_DISTANCES_OFF};
+                ardunioIO.Send(msgToSend, sizeof(msgToSend));
+            }
 
             return DISTANCE;
             break;
         }
         case SERVO:{
-            fprintf(stdout, "SERVO message from ardunio\n");
+            Log::logMessage(PI, LOG_DEBUG, "SERVO message from ardunio");
             return SERVO;
             break;
         }
         case MOTOR:{
-            fprintf(stdout, "MOTOR message from ardunio\n");
+            Log::logMessage(PI, LOG_DEBUG, "MOTOR message from ardunio");
             return MOTOR;
             break;
         }
         case ALREADY_CONNECTED:{
             isConnected = true;
-            fprintf(stdout, "ALREADY_CONNECTED message from ardunio\n");
+            Log::logMessage(PI, LOG_DEBUG, "ALREADY_CONNECTED message from ardunio");
             return ALREADY_CONNECTED;
             break;
         }
 
         default: {
-            fprintf(stdout, "Unknown message from ardunio\n");
+            Log::logMessage(PI, LOG_ERROR, "Unknown message from ardunio");
+            ardunioIO.FlushBuffer();
             break;
         }
 
@@ -153,6 +160,7 @@ void getMessageFromNodeRed() {
         return;
 
     std::string msgStr;
+    msgStr.clear();
     bool timeout = false;
     bool msgEnd = false;
 
@@ -167,17 +175,49 @@ void getMessageFromNodeRed() {
     }
 
     if (timeout)
-        fprintf(stderr, "String from Node-Red timedout, partial msg: %s\n", msgStr.c_str());
+        Log::logMessage(PI, LOG_ERROR, "String from Node-Red timedout, partial msg: " + msgStr);
     else {
-        fprintf(stdout, "Message from Node-Red: %s\n", msgStr.c_str());
-        if(msgStr.find("setMode")){
-            if(msgStr.find("Autonomus")) {
-                currentMode = AUTONOMOUS;
-                fprintf(stdout, "Set mode to autonomus");
-            } else if(msgStr.find("Manual")) {
-                currentMode = MANUAL;
-                fprintf(stdout, "Set mode to manual");
+        Log::logMessage(PI, LOG_DEBUG, "Message from Node-Red: " + msgStr);
+
+        try {
+            json nodeRedJson = json::parse(msgStr);
+            std::string operation;
+            try {
+                operation = nodeRedJson["operation"].get<std::string>();
+            } catch (const std::exception &e) {
+                Log::logMessage(PI, LOG_ERROR, "Unable to find operation within node red message exception: " + std::string(e.what()));
             }
+            if (operation == "setMode") {
+                std::string newMode;
+                try {
+                    newMode = nodeRedJson["mode"].get<std::string>();
+                } catch (const std::exception &e) {
+                    Log::logMessage(PI, LOG_DEBUG, "Unable to find operation within node red message excpetion: " + std::string(e.what()));
+                }
+                if (newMode=="Auto"){
+                    currentMode = AUTONOMOUS;
+                    char msgToSend[] = {OPERATION, TURN_DISTANCES_ON};
+                    ardunioIO.Send(msgToSend, sizeof(msgToSend));
+                    Log::logMessage(PI, LOG_DEBUG, "Autonomus opertion set");
+                } else {
+                    if (newMode=="Manual"){
+                        currentMode = MANUAL;
+                        char msgToSend[] = {OPERATION, TURN_DISTANCES_OFF};
+                        ardunioIO.Send(msgToSend, sizeof(msgToSend));
+                        Log::logMessage(PI, LOG_DEBUG, "Manual operation");
+                    }
+                    else {
+                        Log::logMessage(PI, LOG_ERROR, "Invalid mode: %s " + newMode);
+                    }
+                }
+            } else {
+                Log::logMessage(PI, LOG_DEBUG, "Invalid operation:  " + operation);
+            }
+
+
+        } catch (const std::exception& e) {
+            Log::logMessage(PI, LOG_DEBUG, "Unable to parse json from node red, exception: " + std::string(e.what()));
+
         }
     }
 }

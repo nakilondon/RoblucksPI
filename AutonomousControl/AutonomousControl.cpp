@@ -7,16 +7,21 @@
 #include <cstdint>
 #include <inttypes.h>
 
-void AutonomousControl::joystickCommand(JoystickType joystickType, ControlServoMotor &controlServoMotor) {
+std::list<uint8_t > AutonomousControl::_leftDistances;
+std::list<uint8_t > AutonomousControl::_rightDistances;
+std::list<uint8_t> AutonomousControl::_frontDistances;
+uint8_t AutonomousControl::_stopingCnt;
+
+void AutonomousControl::joystickCommand(JoystickType joystickType) {
 
     switch (joystickType){
         case joyStop:{
-            controlServoMotor.request(cntlStop);
+            ControlMotor::request(MOTOR_STOP);
             break;
         }
         case joyStart:{
-            controlServoMotor.request(cntlCenter);
-            controlServoMotor.request(cntlStart);
+            ControlServo::request(SERVO_CENTER);
+            ControlMotor::request(MOTOR_START);
             _stopingCnt = 0;
             break;
         }
@@ -26,21 +31,16 @@ void AutonomousControl::joystickCommand(JoystickType joystickType, ControlServoM
     }
 }
 
-void AutonomousControl::processDistance(Direction direction, uint8_t measure, ControlServoMotor &controlServoMotor, Mode *currentMode) {
+void AutonomousControl::processDistance(DistanceSensor sensor, uint8_t measure) {
 
-    if (*currentMode != AUTONOMOUS)
+    if (ControlMotor::direction() != D_FORWARD &&
+        ControlMotor::direction() != D_BACK)
         return;
 
-    if (controlServoMotor.direction() != FORWARD &&
-        controlServoMotor.direction() != REVERSE &&
-        controlServoMotor.processingServoRqst() != servoTurnRight &&
-        controlServoMotor.processingServoRqst() != servoTurnLeft)
-        return;
-
-    if (direction == DIRECTION_LEFT || direction == DIRECTION_RIGHT) {
+    if (sensor == SENSOR_LEFT || sensor == SENSOR_RIGHT ) {
         uint8_t leftDistance;
         uint8_t rightDistance;
-        if (direction == DIRECTION_LEFT) {
+        if (sensor == SENSOR_LEFT) {
             _leftDistances.push_front(measure);
             leftDistance = measure;
             if (_rightDistances.empty())
@@ -59,47 +59,39 @@ void AutonomousControl::processDistance(Direction direction, uint8_t measure, Co
             if (_leftDistances.size() > 10)
                 _leftDistances.pop_back();
         }
-        auto totalLength = rightDistance + leftDistance;
 
-        if (checkForTurn(controlServoMotor, totalLength, rightDistance, leftDistance))
+//        if (ControlServo::processingServoRqst() == SERVO_ADJUST_LEFT ||
+//            ControlServo::processingServoRqst() == SERVO_ADJUST_RIGHT)
+
+        if (checkForTurn(rightDistance, leftDistance))
             return;
 
-        auto difference = abs(rightDistance - leftDistance);
+        if (checkForAdjustment(rightDistance, leftDistance))
+            return;
 
-        ControlType cntlType;
-
-        if (difference / totalLength > 0.3) {
-            if ((controlServoMotor.direction() == FORWARD && rightDistance < leftDistance) ||
-                controlServoMotor.direction() == REVERSE && rightDistance > leftDistance) {
-                cntlType = cntlAdjustLeft;
-                _leftDistances.pop_front();
-            } else {
-                cntlType = cntlAdjustRight;
-                _rightDistances.pop_front();
-            }
-            controlServoMotor.request(cntlType);
-
-        } else if (difference <= 0.2) {
-            controlServoMotor.request(cntlCenter);
-        }
+        if (checkForMiddle(rightDistance, leftDistance))
+            return;
     }
 
-    if (DIRECTION_FRONT && measure > 0) {
+    if (SENSOR_FRONT && measure > 0) {
         _frontDistances.push_front(measure);
         if (_frontDistances.size()>10)
             _frontDistances.pop_back();
-        if (measure <= 8) {
+        if (measure <= 5) {
             _stopingCnt++;
-            fprintf(stdout, "Stopping distance: %d, count: %d\n", measure, _stopingCnt);
-          //  if(_stopingCnt>1)
-                controlServoMotor.request(cntlStop);
+            Log::logMessage(PI, LOG_DEBUG, "Stopping distance: " + std::string(measure, sizeof(measure)));
+            ControlMotor::request(MOTOR_STOP);
         } else
             _stopingCnt = 0;
     }
 }
 
-bool AutonomousControl::checkForTurn(ControlServoMotor &controlServoMotor, int totalLength, int rightDistance, int leftDistance) {
-    if (_rightDistances.size() > 5 && _leftDistances.size() > 5) {
+bool AutonomousControl::checkForTurn(int rightDistance, int leftDistance) {
+
+//    fprintf(stdout, "right array size %d, left arrary size %d, right %d, left %d\n",
+     //       _rightDistances.size(), _leftDistances.size(), rightDistance, leftDistance);
+
+ //   if (_rightDistances.size() > 5 && _leftDistances.size() > 5) {
 
         int frontDistance = 200;
         if (!_frontDistances.empty())
@@ -115,18 +107,64 @@ bool AutonomousControl::checkForTurn(ControlServoMotor &controlServoMotor, int t
         for (it = _leftDistances.begin(); it != _leftDistances.end(); it++)
             totalLeft += *it;
 
-        auto rightAverage = totalRight / _rightDistances.size();
-        auto leftAverage = totalLeft / _leftDistances.size();
+        double rightAverage = totalRight / _rightDistances.size();
+        double leftAverage = totalLeft / _leftDistances.size();
+        double totalLength = rightDistance + leftDistance;
+        if (totalLength<=0)
+            return false;
 
-        if (totalLength > (rightAverage + leftAverage) * 1.4 ) {
-            fprintf(stdout, "total len: %d, right Average: %d, leftAverage %d, front %d\n", totalLength, rightAverage,
-                    leftAverage, frontDistance);
-            if (rightDistance > leftDistance)
-                controlServoMotor.request(cntlTurnRight);
+        double rightDiff = abs(rightDistance-rightAverage);
+        double leftDiff = abs(leftDistance - leftAverage);
+
+        //if ((totalLength > (rightAverage + leftAverage) * 1.5 ) ||
+        //     frontDistance < 25){
+        if (rightDiff/rightAverage > 0.2 || leftDiff/leftAverage > 0.2) {
+           // fprintf(stdout, "total len: %d, right Average: %d, leftAverage %d, front %d\n", totalLength, rightAverage,
+           //         leftAverage, frontDistance);
+            if ((rightDistance-rightAverage) > (leftDistance-leftAverage))
+                ControlServo::request(SERVO_3_RIGHT);
             else
-                controlServoMotor.request(cntlTurnLeft);
+                ControlServo::request(SERVO_3_LEFT);
             return true;
         }
+
+   // }
+    return false;
+}
+
+bool AutonomousControl::checkForAdjustment(int rightDistance, int leftDistance) {
+
+    double totalLength = rightDistance + leftDistance;
+    double difference = abs(rightDistance - leftDistance);
+    double percentDifference = difference / totalLength;
+
+    if (percentDifference > 0.3) {
+        if ((ControlMotor::direction() == D_FORWARD && rightDistance < leftDistance) ||
+            ControlMotor::direction() == D_BACK && rightDistance > leftDistance) {
+          //  _leftDistances.pop_front();
+            ControlServo::request(SERVO_ADJUST_LEFT);
+        } else {
+          //  _rightDistances.pop_front();
+            ControlServo::request(SERVO_ADJUST_RIGHT);
+        }
+        return true;
     }
+    return false;
+}
+
+bool AutonomousControl::checkForMiddle(int rightDistance, int leftDistance) {
+
+    if (ControlServo::processingServoRqst() == SERVO_NONE)
+        return false;
+
+    double totalLength = rightDistance + leftDistance;
+    double difference = abs(rightDistance - leftDistance);
+    double percentDifference = difference / totalLength;
+
+    if (percentDifference < 0.2) {
+        ControlServo::request(SERVO_CENTER);
+        return true;
+    }
+
     return false;
 }

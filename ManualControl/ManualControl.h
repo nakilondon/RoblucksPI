@@ -9,7 +9,9 @@
 #include "../Joystick/Joystick.h"
 #include "../SerialIO/SerialIO.h"
 #include "../Message.h"
-#include "../ControlServoMotor/ControlServoMotor.h"
+#include "../Controls/ControlServo.h"
+#include "../Controls/ControlMotor.h"
+#include "../parameters.h"
 
 
 class ManualControl {
@@ -17,7 +19,7 @@ class ManualControl {
 private:
 
 public:
-    void joystickCommand(JoystickType joystickType, int movement, ControlServoMotor &controlServoMotor);
+    static void joystickCommand(JoystickType joystickType, int movement);
 
 
 };

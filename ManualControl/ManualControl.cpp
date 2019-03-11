@@ -3,49 +3,58 @@
 //
 
 #include "ManualControl.h"
-#include "../parameters.h"
 
-void ManualControl::joystickCommand(JoystickType joystickType, int movement, ControlServoMotor &controlServoMotor) {
+void ManualControl::joystickCommand(JoystickType joystickType, int movement) {
 // Attempt to sample an event from the joystick
 
     switch (joystickType) {
         case joyStop: {
-            controlServoMotor.request(cntlStop, 0);
+            ControlMotor::request(MOTOR_STOP);
             break;
         }
 
         case joyIncreaseSpeed: {
-            controlServoMotor.request(cntlIncreaseSpeed, 0);
+            ControlMotor::request(MOTOR_INCREASE_SPEED);
             break;
         }
 
         case joyDecreaseSpeed: {
-            controlServoMotor.request(cntlDecreaseSpeed, 0);
+            ControlMotor::request(MOTOR_DECREASE_SPEED);
             break;
         }
 
         case joyMoveBack: {
-            controlServoMotor.request(cntlMoveBack, 0);
+            ControlMotor::request(MOTOR_MOVE_BACK);
             break;
         }
 
         case joyMoveForward: {
-            controlServoMotor.request(cntlMoveForward, 0);
+            ControlMotor::request(MOTOR_MOVE_FORWARD);
             break;
         }
 
         case joyCenter: {
-            controlServoMotor.request(cntlCenter, 0);
+            ControlServo::request(SERVO_CENTER);
             break;
         };
 
         case joyMoveLeft: {
-            controlServoMotor.request(cntlLeft, movement);
+            ControlServo::request(SERVO_LEFT, movement);
             break;
         }
 
         case joyMoveRight: {
-            controlServoMotor.request(cntlRight, movement);
+            ControlServo::request(SERVO_RIGHT, movement);
+            break;
+        }
+
+        case joy3Left: {
+            ControlServo::request(SERVO_3_LEFT);
+            break;
+        }
+
+        case joy3Right: {
+            ControlServo::request(SERVO_3_RIGHT);
             break;
         }
 

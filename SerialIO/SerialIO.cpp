@@ -104,3 +104,7 @@ SerialIO::~SerialIO() {
     if(_handle>=0)
         close(_handle);
 }
+
+void SerialIO::FlushBuffer() {
+    ioctl(_handle,TCFLSH,TCIOFLUSH);
+}
