@@ -9,5 +9,11 @@
 #define SPEED_STEPS           5
 #define MAX_SPEED            40
 
+#define DEFAULT_MODE   MANUAL
+
+enum Mode {
+    MANUAL,
+    AUTONOMOUS
+};
 
 #endif //ROBLUCKSPI_PARAMETERS_H

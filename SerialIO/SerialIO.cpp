@@ -8,6 +8,7 @@ extern "C" {
 #include <sys/ioctl.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <errno.h>
 }
 
 #include <chrono>
@@ -25,7 +26,7 @@ bool SerialIO::Open()
     struct termios tio;
     struct termios2 tio2;
 
-    _handle  = open(_deviceName.c_str(),O_RDWR | O_NOCTTY /* | O_NONBLOCK */);
+    _handle  = open(_deviceName.c_str(),O_RDWR | O_NOCTTY | O_NDELAY /* | O_NONBLOCK */);
 
     if(_handle <0)
         return false;
@@ -103,4 +104,12 @@ bool SerialIO::WaitForBytes(int numBytes, unsigned long timeout) {
 SerialIO::~SerialIO() {
     if(_handle>=0)
         close(_handle);
+}
+
+void SerialIO::FlushBuffer() {
+    ioctl(_handle,TCFLSH,TCIOFLUSH);
+}
+
+bool SerialIO::handlerOpen() {
+    return (_handle>=0);
 }

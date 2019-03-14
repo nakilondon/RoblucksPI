@@ -28,6 +28,8 @@ public:
     uint8_t Read();
     int BytesQued();
     bool WaitForBytes(int numBytes, unsigned long timeout);
+    void FlushBuffer();
+    bool handlerOpen();
 };
 
 
