@@ -88,3 +88,12 @@ JoystickType RoblucksJoystick::checkJoystick(int &movement) {
 
     return joyNone;
 }
+
+void RoblucksJoystick::resetJoystick() {
+    (&_joystick)->~Joystick();
+    new (&_joystick) Joystick();
+}
+
+bool RoblucksJoystick::isFound() {
+    return _joystick.isFound();
+}

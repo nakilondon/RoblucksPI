@@ -4,68 +4,40 @@
 #include "SerialIO/SerialIO.h"
 #include "parameters.h"
 #include "Joystick/RoblucksJoystick.h"
-#include "ManualControl/ManualControl.h"
-#include "AutonomousControl/AutonomousControl.h"
+#include "Controls/ManualControl.h"
+#include "Controls/AutonomousControl.h"
 #include "Controls/ControlServo.h"
 #include "Utils/json.hpp"
 #include "Utils/Log.h"
+#include <chrono>
 
 using json = nlohmann::json;
 
 bool isConnected = false;
 SerialIO ardunioIO("/dev/arduino-roblucks", 115200);
 SerialIO nodeRedIO("/dev/tnt1", 115200);
+RoblucksJoystick joystick;
+
 Mode currentMode = DEFAULT_MODE;
+
 Message getMessageFromArdunio();
+void startUp();
 
 void getMessageFromNodeRed();
 
+void checkJoystick();
+
 int main() {
-    RoblucksJoystick joystick;
+
     setbuf(stdout, 0);
 
-    Message message = HELLO;
-
-    if (!ardunioIO.Open()) {
-        Log::logMessage(PI, LOG_CRITICAL, "Unable to open Arduino port");
-        exit(1);
-    }
-
-    if (!nodeRedIO.Open()) {
-        Log::logMessage(PI, LOG_CRITICAL, "Unable to open Node-Red port");
-        exit(1);
-    }
-
-    ControlServo::setArduino(&ardunioIO);
-    ControlMotor::setArduino(&ardunioIO);
-    Log::setNodeRed(&nodeRedIO);
-
-    while (!isConnected){
-        ardunioIO.Send(&message,1);
-        if(ardunioIO.WaitForBytes(1, 1000))
-            if(getMessageFromArdunio()==HELLO)
-                message=ALREADY_CONNECTED;
-    }
-
-    if (currentMode != AUTONOMOUS) {
-        char msgToSend[] = {OPERATION, TURN_DISTANCES_OFF};
-        ardunioIO.Send(msgToSend, sizeof(msgToSend));
-    }
-
+    startUp();
 
     while (true) {
         // Restrict rate
-        usleep(10);
+        usleep(1000);
 
-        int movement = 0;
-        auto joystickType = joystick.checkJoystick(movement);
-
-        if (joystickType != joyNone) {
-            if (currentMode == MANUAL)
-                ManualControl::joystickCommand(joystickType, movement);
-            else
-                AutonomousControl::joystickCommand(joystickType);
-        }
+        checkJoystick();
 
         if (ardunioIO.BytesQued()>0)
             getMessageFromArdunio();
@@ -74,6 +46,91 @@ int main() {
             getMessageFromNodeRed();
     }
 }
+
+void checkJoystick() {
+    int movement = 0;
+    auto joystickType = joystick.checkJoystick(movement);
+
+    if (joystickType != joyNone) {
+            if (currentMode == MANUAL)
+                ManualControl::joystickCommand(joystickType, movement);
+            else
+                AutonomousControl::joystickCommand(joystickType);
+        }
+}
+
+void startUp() {
+
+    using namespace std::chrono;
+
+    while (!ardunioIO.handlerOpen() ||
+            !nodeRedIO.handlerOpen() ||
+            !joystick.isFound() ||
+            !isConnected) {
+
+        if (!nodeRedIO.handlerOpen()) {
+            if (!nodeRedIO.Open()) {
+                Log::logMessage(PI, LOG_CRITICAL, "Unable to open Node-Red port");
+            }
+        }
+
+        if (!ardunioIO.handlerOpen()) {
+            if (!ardunioIO.Open()) {
+                Log::logMessage(PI, LOG_CRITICAL, "Unable to open Arduino port");
+            }
+        }
+
+        if (!joystick.isFound()) {
+            Log::logMessage(PI, LOG_CRITICAL, "Unable to find joystick");
+            joystick.resetJoystick();
+        }
+
+        char message[] = {HELLO};
+
+        milliseconds strTime = duration_cast< milliseconds >(
+                system_clock::now().time_since_epoch()
+        );
+
+        milliseconds nowTime = duration_cast< milliseconds >(
+                system_clock::now().time_since_epoch()
+        );
+
+        while (ardunioIO.handlerOpen() & !isConnected && nowTime < strTime +(milliseconds)10000 )
+             {
+            Log::logMessage(PI, LOG_INFO, "Sending Hello");
+            ardunioIO.Send(message, sizeof(message));
+            if (ardunioIO.WaitForBytes(1, 1000)) {
+                if (getMessageFromArdunio() == HELLO) {
+                    Log::logMessage(PI, LOG_INFO, "Sending Already Connected");
+                    message[0] = ALREADY_CONNECTED;
+                }
+            }
+            nowTime = duration_cast< milliseconds >(
+                      system_clock::now().time_since_epoch());
+        }
+        if (!ardunioIO.handlerOpen() ||
+         !nodeRedIO.handlerOpen() ||
+         !joystick.isFound() ||
+         !isConnected)
+            sleep(10);
+    }
+
+    ControlServo::setArduino(&ardunioIO);
+    ControlMotor::setArduino(&ardunioIO);
+    Log::setNodeRed(&nodeRedIO);
+
+    if (currentMode != AUTONOMOUS) {
+        Log::logMessage(PI, LOG_DEBUG, "Turning off distances");
+        char msgToSend[] = {OPERATION, TURN_DISTANCES_OFF};
+        ardunioIO.Send(msgToSend, sizeof(msgToSend));
+    }
+
+    Log::logMessage(PI, LOG_DEBUG, "Setting arduino log level");
+    char msgToSend[] = {OPERATION, SET_LOG_LEVEL, LOG_DEBUG};
+    ardunioIO.Send(msgToSend, sizeof(msgToSend));
+
+}
+
 
 Message getMessageFromArdunio() {
     if (ardunioIO.BytesQued() <= 0)
@@ -100,7 +157,8 @@ Message getMessageFromArdunio() {
                     if (ardunioIO.WaitForBytes(1, 10000)) {
                         msgStr += ardunioIO.Read();
                         if (msgStr.length()>2)
-                            if (msgStr.substr(msgStr.length()-2,2)=="\r\n")
+                            if (msgStr.substr(msgStr.length()-2,2)=="\r\n" ||
+                                msgStr.substr(msgStr.length()-2,2)=="\r\r")
                                 msgEnd = true;
                     } else
                         timeout = true;
@@ -147,7 +205,6 @@ Message getMessageFromArdunio() {
 
         default: {
             Log::logMessage(PI, LOG_ERROR, "Unknown message from ardunio");
-            ardunioIO.FlushBuffer();
             break;
         }
 

@@ -29,6 +29,7 @@ public:
     int BytesQued();
     bool WaitForBytes(int numBytes, unsigned long timeout);
     void FlushBuffer();
+    bool handlerOpen();
 };
 
 

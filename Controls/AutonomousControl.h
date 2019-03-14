@@ -10,8 +10,8 @@
 #include "../Joystick/Joystick.h"
 #include "../Joystick/RoblucksJoystick.h"
 #include "../SerialIO/SerialIO.h"
-#include "../Controls/ControlServo.h"
-#include "../Controls/ControlMotor.h"
+#include "ControlServo.h"
+#include "ControlMotor.h"
 #include <list>
 #include "../Utils/Timer.h"
 #include "../Utils/Log.h"

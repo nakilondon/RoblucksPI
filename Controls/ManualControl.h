@@ -9,8 +9,8 @@
 #include "../Joystick/Joystick.h"
 #include "../SerialIO/SerialIO.h"
 #include "../Message.h"
-#include "../Controls/ControlServo.h"
-#include "../Controls/ControlMotor.h"
+#include "ControlServo.h"
+#include "ControlMotor.h"
 #include "../parameters.h"
 
 

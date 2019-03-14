@@ -29,6 +29,8 @@ private:
 
 public:
     JoystickType checkJoystick(int &movement);
+    bool isFound();
+    void resetJoystick();
 };
 
 

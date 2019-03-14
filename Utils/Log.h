@@ -7,6 +7,7 @@
 
 #include "../SerialIO/SerialIO.h"
 #include "json.hpp"
+#include <chrono>
 
 enum LogLevel {
     LOG_DEBUG = 0,
@@ -32,6 +33,8 @@ public:
     static void logMessage(MessageSource messageSource, std::string logLevel, std::string messageToSend);
     static void setNodeRed(SerialIO *nodeRedIO);
     static void setLogLevel(LogLevel logLevel);
+
+    static std::string getTimeStamp();
 };
 
 

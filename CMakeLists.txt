@@ -7,8 +7,8 @@ set(SOURCE_FILES main.cpp
         SerialIO/SerialIO.cpp SerialIO/SerialIO.h
         Joystick/Joystick.cpp Joystick/Joystick.h
         Joystick/RoblucksJoystick.cpp Joystick/RoblucksJoystick.h
-        ManualControl/ManualControl.cpp ManualControl/ManualControl.cpp
-        AutonomousControl/AutonomousControl.h AutonomousControl/AutonomousControl.cpp
+        Controls/ManualControl.cpp Controls/ManualControl.cpp
+        Controls/AutonomousControl.h Controls/AutonomousControl.cpp
         Controls/ControlServo.cpp Controls/ControlServo.h
         Controls/ControlMotor.h Controls/ControlMotor.cpp
         Utils/Log.h Utils/Log.cpp

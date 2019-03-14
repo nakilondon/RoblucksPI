@@ -1,0 +1,26 @@
+{
+  "currentConfig": "manual",
+  "logging":{
+    "output":[
+      "nodeRed",
+      "stdIO"
+    ],
+    "minLevel": {
+      "pi": 0,
+      "arduino": 0
+    }
+  },
+  "manual": {
+    "maxSpeed": 40,
+    "minSpeed": 5,
+    "startSpeed": 10,
+    "speedSteps": 5
+  },
+  "auto": {
+    "maxSpeed": 10,
+    "minSpeed": 5,
+    "startSpeed": 7,
+    "speedSteps": 1,
+    "turnType": "normal"
+  }
+}
