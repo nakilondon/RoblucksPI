@@ -39,12 +39,17 @@ private:
     static uint8_t  _currentSpeed;
     static Direction _currentDirection;
     static SerialIO _arduinoIO;
+    static uint8_t _maxSpeed;
+    static uint8_t _minSpeed;
+    static uint8_t _speedSteps;
+    static uint8_t _startSpeed;
 
 public:
     static Direction direction();
     static void request(MotorCntl motorCntl, uint8_t speed = 0);
     static void setArduino(SerialIO *arduinoIO);
     static uint8_t currentSpeed();
+    static void setSpeeds(uint8_t maxSpeed, uint8_t minSpeed, uint8_t speedSteps, uint8_t startSpeed);
 };
 
 

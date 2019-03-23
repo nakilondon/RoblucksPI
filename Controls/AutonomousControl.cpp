@@ -12,6 +12,23 @@ std::list<uint8_t > AutonomousControl::_rightDistances;
 std::list<uint8_t> AutonomousControl::_frontDistances;
 uint8_t AutonomousControl::_stopingCnt;
 
+void AutonomousControl::setup(json autoConfig) {
+    Log::logMessage(PI, LOG_INFO, "Auto config = " + autoConfig.dump());
+
+    ControlMotor::setSpeeds(
+            autoConfig["maxSpeed"].get<uint8_t>(),
+            autoConfig["minSpeed"].get<uint8_t>(),
+            autoConfig["speedSteps"].get<uint8_t>(),
+            autoConfig["startSpeed"].get<uint8_t>());
+
+    auto turnType = autoConfig["turnType"].get<std::string>();
+
+    if (turnType=="normal") {
+        AutonomousControl::setTurnType(TURN_NORMAL);
+    } else
+        AutonomousControl::setTurnType(TURN_3);
+}
+
 void AutonomousControl::joystickCommand(JoystickType joystickType) {
 
     switch (joystickType){
@@ -167,4 +184,10 @@ bool AutonomousControl::checkForMiddle(int rightDistance, int leftDistance) {
     }
 
     return false;
+}
+
+TurnType AutonomousControl::_turnType = TURN_3;
+
+void AutonomousControl::setTurnType(TurnType turnType) {
+    _turnType = turnType;
 }

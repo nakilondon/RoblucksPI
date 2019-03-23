@@ -10,6 +10,7 @@
 #include "Utils/json.hpp"
 #include "Utils/Log.h"
 #include <chrono>
+#include <fstream>
 
 using json = nlohmann::json;
 
@@ -119,15 +120,44 @@ void startUp() {
     ControlMotor::setArduino(&ardunioIO);
     Log::setNodeRed(&nodeRedIO);
 
+
+    std::ifstream configFile("/home/pi/roblucks/config.json");
+
+    json configJson;
+
+    configFile >> configJson;
+
+    auto currentConfig = configJson["currentConfig"].get<std::string>();
+
+    if (currentConfig=="manual"){
+        currentMode = MANUAL;
+        ManualControl::setup(configJson["manual"]);
+    } else if (currentConfig=="auto") {
+        currentMode = AUTONOMOUS;
+        AutonomousControl::setup(configJson["auto"]);
+    } else {
+        Log::logMessage(PI, LOG_CRITICAL, "Unknown mode of " + currentConfig + "in config.json");
+    }
+
     if (currentMode != AUTONOMOUS) {
         Log::logMessage(PI, LOG_DEBUG, "Turning off distances");
         char msgToSend[] = {OPERATION, TURN_DISTANCES_OFF};
         ardunioIO.Send(msgToSend, sizeof(msgToSend));
     }
 
+    auto logConfig = configJson["logging"];
+
+    auto minLogLevels = logConfig["minLevel"];
+
+    auto ardunioLevel = minLogLevels["arduino"].get<uint8_t >();
+
     Log::logMessage(PI, LOG_DEBUG, "Setting arduino log level");
-    char msgToSend[] = {OPERATION, SET_LOG_LEVEL, LOG_DEBUG};
+    char msgToSend[] = {OPERATION, SET_LOG_LEVEL, ardunioLevel};
     ardunioIO.Send(msgToSend, sizeof(msgToSend));
+
+    auto piLevel = minLogLevels["pi"].get<uint8_t >();
+
+    Log::setLogLevel(static_cast<LogLevel>(piLevel));
 
 }
 

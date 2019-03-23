@@ -15,11 +15,19 @@
 #include <list>
 #include "../Utils/Timer.h"
 #include "../Utils/Log.h"
+#include "../Utils/json.hpp"
 
+using json = nlohmann::json;
+
+enum TurnType {
+    TURN_NORMAL,
+    TURN_3
+};
 
 class AutonomousControl {
 
 private:
+    static TurnType _turnType;
     static std::list<uint8_t > _leftDistances;
     static std::list<uint8_t > _rightDistances;
     static std::list<uint8_t> _frontDistances;
@@ -31,6 +39,8 @@ private:
 public:
     static void joystickCommand(JoystickType joystickType);
     static void processDistance(DistanceSensor sensor, uint8_t measure);
+    static void setTurnType(TurnType turnType);
+    static void setup(json manualConfig);
 };
 
 
