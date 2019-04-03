@@ -55,7 +55,7 @@ void Log::logMessage(MessageSource messageSource, LogLevel logLevel, std::string
     jsonOutput["logLevel"] = logLevel;
     jsonOutput["msgDetail"] = messageToSend;
 
-    _nodeRedIO.Send(jsonOutput.dump()+"\n");
+ //   _nodeRedIO.Send(jsonOutput.dump()+"\n");
 
     if (_outputToScreen){
         fprintf(stdout, "%s\n", jsonOutput.dump().c_str());

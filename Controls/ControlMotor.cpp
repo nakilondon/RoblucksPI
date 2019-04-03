@@ -7,7 +7,7 @@
 Direction ControlMotor::_currentDirection = D_STOP;
 uint8_t ControlMotor::_currentSpeed;
 SerialIO ControlMotor::_arduinoIO = SerialIO("", 115200);
-
+Timer ControlMotor::_timer;
 
 void ControlMotor::request(MotorCntl motorCntl, uint8_t speed) {
 
@@ -21,12 +21,19 @@ void ControlMotor::request(MotorCntl motorCntl, uint8_t speed) {
         }
         case (MOTOR_START): {
             Log::logMessage(PI, LOG_DEBUG, "Motor request start");
-            request(MOTOR_MOVE_FORWARD);
+            request(MOTOR_MOVE_FORWARD, speed);
             break;
         }
 
         case (MOTOR_MOVE_FORWARD):{
             Log::logMessage(PI, LOG_DEBUG, "Motor request move forward");
+            if (speed <= _maxSpeed && speed >= _minSpeed ){
+                _currentSpeed = speed;
+                char msgToSend[] = {MOTOR, static_cast<char>(FORWARD), static_cast<char>(_currentSpeed)};
+                _arduinoIO.Send(msgToSend, sizeof(msgToSend));
+                _currentDirection = D_FORWARD;
+            }
+
             if (_currentDirection != D_FORWARD) {
                 _currentSpeed = _startSpeed;
                 char msgToSend[] = {MOTOR, static_cast<char>(FORWARD), static_cast<char>(_currentSpeed)};
@@ -38,6 +45,13 @@ void ControlMotor::request(MotorCntl motorCntl, uint8_t speed) {
         }
         case (MOTOR_MOVE_BACK):{
             if (_currentDirection != D_BACK) {
+                if (speed <= _maxSpeed && speed >= _minSpeed ){
+                    _currentSpeed = speed;
+                    char msgToSend[] = {MOTOR, static_cast<char>(FORWARD), static_cast<char>(_currentSpeed)};
+                    _arduinoIO.Send(msgToSend, sizeof(msgToSend));
+                    _currentDirection = D_FORWARD;
+                }
+
                 Log::logMessage(PI, LOG_DEBUG, "Motor request move back");
                 _currentSpeed = _startSpeed;
                 char msgToSend[] = {MOTOR, static_cast<char>(REVERSE), static_cast<char>(_currentSpeed)};
@@ -75,6 +89,19 @@ void ControlMotor::request(MotorCntl motorCntl, uint8_t speed) {
                     return;
                 _arduinoIO.Send(msgToSend, sizeof(msgToSend));
             }
+            break;
+        }
+        case (MOTOR_BACKUP):{
+            Log::logMessage(PI, LOG_DEBUG, "Motor Backup requested");
+            request(MOTOR_MOVE_BACK, _currentSpeed);
+
+            _timer.setTimeout([&]() {
+                Log::logMessage(PI, LOG_DEBUG, "Servo turn left timer timed out");
+                request(MOTOR_MOVE_FORWARD, _currentSpeed);
+                _timer.stop();
+                //}, 1500 - ControlMotor::currentSpeed() * 10);
+            }, 1000);
+
             break;
         }
         default:{

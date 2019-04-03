@@ -34,7 +34,7 @@ bool SerialIO::Open()
     tio.c_oflag = 0;
     tio.c_lflag = 0;       //ICANON;
     tio.c_cc[VMIN]=0;
-    tio.c_cc[VTIME]=1;     // time out every .1 sec
+  //  tio.c_cc[VTIME]=1;     // time out every .1 sec
     ioctl(_handle,TCSETS,&tio);
 
     ioctl(_handle,TCGETS2,&tio2);
@@ -70,6 +70,21 @@ int SerialIO::Read() {
 uint8_t SerialIO::Read() {
     uint8_t x;
     read(_handle, &x, 1);
+    return x;
+}
+
+int SerialIO::ReadInt() {
+    int x;
+
+    read(_handle, &x, sizeof(x) );
+    return x;
+}
+
+
+short SerialIO::ReadShort() {
+    short x;
+
+    read(_handle, &x, sizeof(x) );
     return x;
 }
 

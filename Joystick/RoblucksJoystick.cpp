@@ -23,25 +23,25 @@ JoystickType RoblucksJoystick::checkJoystick(int &movement) {
                     }
                     break;
                 }
-                case 3: {
+                case 2: {
                     if (event.value == 1) {
                         return joy3Left;
                     }
                     break;
                 }
-                case 4: {
+                case 3: {
                     if (event.value == 1) {
                         return joyStart;
                     }
                     break;
                 }
-                case 6: {
+                case 4: {
                     if (event.value == 1)
                         return joyIncreaseSpeed;
 
                     break;
                 }
-                case 7: {
+                case 5: {
                     if (event.value == 1)
                         return joyDecreaseSpeed;
 

@@ -43,8 +43,8 @@ int main() {
         if (ardunioIO.BytesQued()>0)
             getMessageFromArdunio();
 
-        if (nodeRedIO.BytesQued()>0)
-            getMessageFromNodeRed();
+//        if (nodeRedIO.BytesQued()>0)
+//            getMessageFromNodeRed();
     }
 }
 
@@ -55,8 +55,19 @@ void checkJoystick() {
     if (joystickType != joyNone) {
             if (currentMode == MANUAL)
                 ManualControl::joystickCommand(joystickType, movement);
-            else
+            else {
+                if (joystickType == joyStart ){
+                    Log::logMessage(PI, LOG_DEBUG, "Auto Start requested");
+                    char msgToSend[] = {OPERATION, TURN_DISTANCES_ON};
+                    ardunioIO.Send(msgToSend, sizeof(msgToSend));
+                    usleep(100000);
+                } else if (joystickType == joyStop) {
+                    char msgToSend[] = {OPERATION, TURN_DISTANCES_OFF};
+                    ardunioIO.Send(msgToSend, sizeof(msgToSend));
+                }
                 AutonomousControl::joystickCommand(joystickType);
+
+            }
         }
 }
 
@@ -64,20 +75,28 @@ void startUp() {
 
     using namespace std::chrono;
 
+    char message[] = {HELLO};
+
     while (!ardunioIO.handlerOpen() ||
-            !nodeRedIO.handlerOpen() ||
+       // !nodeRedIO.handlerOpen() ||
             !joystick.isFound() ||
             !isConnected) {
 
-        if (!nodeRedIO.handlerOpen()) {
-            if (!nodeRedIO.Open()) {
-                Log::logMessage(PI, LOG_CRITICAL, "Unable to open Node-Red port");
-            }
-        }
+  //      if (!nodeRedIO.handlerOpen()) {
+  //          if (!nodeRedIO.Open()) {
+  //              Log::logMessage(PI, LOG_CRITICAL, "Unable to open Node-Red port");
+  //          }
+  //      }
 
         if (!ardunioIO.handlerOpen()) {
             if (!ardunioIO.Open()) {
                 Log::logMessage(PI, LOG_CRITICAL, "Unable to open Arduino port");
+            } else {
+                ardunioIO.FlushBuffer();
+
+                for (int i=0; i < 30; i++) { // ignore first messages
+                    ardunioIO.Read();
+                }
             }
         }
 
@@ -85,8 +104,6 @@ void startUp() {
             Log::logMessage(PI, LOG_CRITICAL, "Unable to find joystick");
             joystick.resetJoystick();
         }
-
-        char message[] = {HELLO};
 
         milliseconds strTime = duration_cast< milliseconds >(
                 system_clock::now().time_since_epoch()
@@ -97,20 +114,25 @@ void startUp() {
         );
 
         while (ardunioIO.handlerOpen() & !isConnected && nowTime < strTime +(milliseconds)10000 )
-             {
-            Log::logMessage(PI, LOG_INFO, "Sending Hello");
+            {
+            if (message[0]==HELLO)
+                Log::logMessage(PI, LOG_INFO, "Sending Hello");
+            else
+                Log::logMessage(PI, LOG_INFO, "Sending Already Connected");
             ardunioIO.Send(message, sizeof(message));
+            usleep(1000);
+
             if (ardunioIO.WaitForBytes(1, 1000)) {
                 if (getMessageFromArdunio() == HELLO) {
-                    Log::logMessage(PI, LOG_INFO, "Sending Already Connected");
                     message[0] = ALREADY_CONNECTED;
                 }
             }
+
             nowTime = duration_cast< milliseconds >(
                       system_clock::now().time_since_epoch());
         }
         if (!ardunioIO.handlerOpen() ||
-         !nodeRedIO.handlerOpen() ||
+    //     !nodeRedIO.handlerOpen() ||
          !joystick.isFound() ||
          !isConnected)
             sleep(10);
@@ -118,7 +140,7 @@ void startUp() {
 
     ControlServo::setArduino(&ardunioIO);
     ControlMotor::setArduino(&ardunioIO);
-    Log::setNodeRed(&nodeRedIO);
+   // Log::setNodeRed(&nodeRedIO);
 
 
     std::ifstream configFile("/home/pi/roblucks/config.json");
@@ -139,10 +161,10 @@ void startUp() {
         Log::logMessage(PI, LOG_CRITICAL, "Unknown mode of " + currentConfig + "in config.json");
     }
 
-    if (currentMode != AUTONOMOUS) {
+    if (currentMode == AUTONOMOUS) {
+        Log::logMessage(PI, LOG_DEBUG, "Turning on distances");
+    } else {
         Log::logMessage(PI, LOG_DEBUG, "Turning off distances");
-        char msgToSend[] = {OPERATION, TURN_DISTANCES_OFF};
-        ardunioIO.Send(msgToSend, sizeof(msgToSend));
     }
 
     auto logConfig = configJson["logging"];
@@ -171,6 +193,9 @@ Message getMessageFromArdunio() {
     switch (msgRecv) {
         case HELLO:{
             Log::logMessage(PI, LOG_INFO, "Connected");
+            usleep(100);
+            uint8_t alreadyConnected[] = {ALREADY_CONNECTED};
+            ardunioIO.Send(alreadyConnected,1);
             return HELLO;
             break;
         }
@@ -203,14 +228,26 @@ Message getMessageFromArdunio() {
             break;
         }
         case DISTANCE:{
-            DistanceSensor direction = static_cast<DistanceSensor >(ardunioIO.Read());
-            uint8_t measure = ardunioIO.Read();
+            if(ardunioIO.WaitForBytes(1,1000)) {
+                DistanceSensor direction = static_cast<DistanceSensor >(ardunioIO.Read());
+                if(ardunioIO.WaitForBytes(2,1000)) {
+                    short measure = ardunioIO.ReadShort();
 
-            if (currentMode==AUTONOMOUS)
-                AutonomousControl::processDistance(direction, measure);
-            else {
-                char msgToSend[] = {OPERATION, TURN_DISTANCES_OFF};
-                ardunioIO.Send(msgToSend, sizeof(msgToSend));
+                 //   Log::logMessage(PI, LOG_DEBUG, "Distance, sensor: " + std::to_string(direction) + " measure: " +
+                 //                                  std::to_string(measure));
+
+                    if (measure > 100) {
+                        Log::logMessage(PI, LOG_ERROR, "Invalid measure recevied, flushing buffer");
+                        //  ardunioIO.FlushBuffer();
+                    }
+
+                    if (currentMode == AUTONOMOUS)
+                        AutonomousControl::processDistance(direction, measure);
+                    else {
+                        char msgToSend[] = {OPERATION, TURN_DISTANCES_OFF};
+                        ardunioIO.Send(msgToSend, sizeof(msgToSend));
+                    }
+                }
             }
 
             return DISTANCE;
@@ -229,6 +266,7 @@ Message getMessageFromArdunio() {
         case ALREADY_CONNECTED:{
             isConnected = true;
             Log::logMessage(PI, LOG_DEBUG, "ALREADY_CONNECTED message from ardunio");
+            usleep(1000);
             return ALREADY_CONNECTED;
             break;
         }
@@ -255,7 +293,7 @@ void getMessageFromNodeRed() {
         if (nodeRedIO.WaitForBytes(1, 10000)) {
             msgStr += nodeRedIO.Read();
             if (msgStr.length()>2)
-                if (msgStr.substr(msgStr.length()-1,1)=="\n")
+                if (msgStr.substr(msgStr.length()-2,2)=="\r\r")
                     msgEnd = true;
         } else
             timeout = true;
@@ -281,16 +319,20 @@ void getMessageFromNodeRed() {
                 } catch (const std::exception &e) {
                     Log::logMessage(PI, LOG_DEBUG, "Unable to find operation within node red message excpetion: " + std::string(e.what()));
                 }
-                if (newMode=="Auto"){
+                if (newMode=="auto"){
                     currentMode = AUTONOMOUS;
+                    auto autoConfig = nodeRedJson["auto"];
                     char msgToSend[] = {OPERATION, TURN_DISTANCES_ON};
                     ardunioIO.Send(msgToSend, sizeof(msgToSend));
+                    AutonomousControl::setup(autoConfig);
                     Log::logMessage(PI, LOG_DEBUG, "Autonomus opertion set");
                 } else {
-                    if (newMode=="Manual"){
+                    if (newMode=="manual"){
                         currentMode = MANUAL;
+                        auto manualConfig = nodeRedJson["manual"];
                         char msgToSend[] = {OPERATION, TURN_DISTANCES_OFF};
                         ardunioIO.Send(msgToSend, sizeof(msgToSend));
+                        ManualControl::setup(manualConfig);
                         Log::logMessage(PI, LOG_DEBUG, "Manual operation");
                     }
                     else {

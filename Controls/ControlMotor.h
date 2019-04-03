@@ -15,6 +15,7 @@
 #include <chrono>
 #include <cstdint>
 #include <inttypes.h>
+#include "../Utils/Timer.h"
 
 
 enum MotorCntl {
@@ -24,7 +25,8 @@ enum MotorCntl {
     MOTOR_STOP,
     MOTOR_START,
     MOTOR_INCREASE_SPEED,
-    MOTOR_DECREASE_SPEED
+    MOTOR_DECREASE_SPEED,
+    MOTOR_BACKUP
 };
 
 enum Direction{
@@ -43,6 +45,7 @@ private:
     static uint8_t _minSpeed;
     static uint8_t _speedSteps;
     static uint8_t _startSpeed;
+    static Timer _timer;
 
 public:
     static Direction direction();
