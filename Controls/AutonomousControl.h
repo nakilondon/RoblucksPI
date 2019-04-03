@@ -15,22 +15,38 @@
 #include <list>
 #include "../Utils/Timer.h"
 #include "../Utils/Log.h"
+#include "../Utils/json.hpp"
 
+using json = nlohmann::json;
+
+enum TurnType {
+    TURN_NORMAL,
+    TURN_3
+};
 
 class AutonomousControl {
 
 private:
-    static std::list<uint8_t > _leftDistances;
-    static std::list<uint8_t > _rightDistances;
-    static std::list<uint8_t> _frontDistances;
+    static TurnType _turnType;
+    static std::list<short> _leftDistances;
+    static std::list<short> _rightDistances;
+    static std::list<short> _frontDistances;
     static uint8_t _stopingCnt;
     static bool checkForTurn(int rightDistance, int leftDistance);
-    static bool checkForAdjustment(int rightDistance, int leftDistance);
+    static bool checkForAdjustment(DistanceSensor sensor, short measure);
     static bool checkForMiddle(int rightDistance, int leftDistance);
+    static bool _turningSpeedSet;
+    static uint8_t _straightSpeed;
+    static uint8_t _turningSpeed;
+    static Timer _timer;
+    static bool _stopped;
+    static uint8_t _turnTime;
 
 public:
     static void joystickCommand(JoystickType joystickType);
-    static void processDistance(DistanceSensor sensor, uint8_t measure);
+    static void processDistance(DistanceSensor sensor, short measure);
+    static void setTurnType(TurnType turnType);
+    static void setup(json manualConfig);
 };
 
 

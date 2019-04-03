@@ -26,6 +26,8 @@ public:
     bool Send(std::string);
     //int Read();
     uint8_t Read();
+    int ReadInt();
+    short ReadShort();
     int BytesQued();
     bool WaitForBytes(int numBytes, unsigned long timeout);
     void FlushBuffer();

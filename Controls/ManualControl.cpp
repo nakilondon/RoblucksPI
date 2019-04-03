@@ -3,6 +3,15 @@
 //
 
 #include "ManualControl.h"
+void ManualControl::setup(json manualConfig) {
+    Log::logMessage(PI, LOG_INFO, "Manual config = " + manualConfig.dump());
+
+    ControlMotor::setSpeeds(
+            manualConfig["maxSpeed"].get<uint8_t>(),
+            manualConfig["minSpeed"].get<uint8_t>(),
+            manualConfig["speedSteps"].get<uint8_t>(),
+            manualConfig["startSpeed"].get<uint8_t>());
+}
 
 void ManualControl::joystickCommand(JoystickType joystickType, int movement) {
 // Attempt to sample an event from the joystick

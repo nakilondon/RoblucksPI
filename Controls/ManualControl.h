@@ -12,13 +12,16 @@
 #include "ControlServo.h"
 #include "ControlMotor.h"
 #include "../parameters.h"
+#include "../Utils/json.hpp"
 
+using json = nlohmann::json;
 
 class ManualControl {
 
 private:
 
 public:
+    static void setup(json manualConfig);
     static void joystickCommand(JoystickType joystickType, int movement);
 
 

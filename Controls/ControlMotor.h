@@ -15,6 +15,7 @@
 #include <chrono>
 #include <cstdint>
 #include <inttypes.h>
+#include "../Utils/Timer.h"
 
 
 enum MotorCntl {
@@ -24,7 +25,8 @@ enum MotorCntl {
     MOTOR_STOP,
     MOTOR_START,
     MOTOR_INCREASE_SPEED,
-    MOTOR_DECREASE_SPEED
+    MOTOR_DECREASE_SPEED,
+    MOTOR_BACKUP
 };
 
 enum Direction{
@@ -39,12 +41,18 @@ private:
     static uint8_t  _currentSpeed;
     static Direction _currentDirection;
     static SerialIO _arduinoIO;
+    static uint8_t _maxSpeed;
+    static uint8_t _minSpeed;
+    static uint8_t _speedSteps;
+    static uint8_t _startSpeed;
+    static Timer _timer;
 
 public:
     static Direction direction();
     static void request(MotorCntl motorCntl, uint8_t speed = 0);
     static void setArduino(SerialIO *arduinoIO);
     static uint8_t currentSpeed();
+    static void setSpeeds(uint8_t maxSpeed, uint8_t minSpeed, uint8_t speedSteps, uint8_t startSpeed);
 };
 
 

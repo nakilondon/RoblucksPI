@@ -8,7 +8,6 @@ ServoCntl ControlServo::_servoCntl = SERVO_NONE;
 Timer ControlServo::_timer;
 SerialIO ControlServo::_arduinoIO = SerialIO("", 115200);
 
-
 void ControlServo::request(ServoCntl cntlType, uint8_t movement) {
 
     switch (cntlType) {
@@ -18,12 +17,14 @@ void ControlServo::request(ServoCntl cntlType, uint8_t movement) {
             _arduinoIO.Send(msgToSend, sizeof(msgToSend));
             break;
         }
+
         case (SERVO_RIGHT): {
             Log::logMessage(PI, LOG_DEBUG, "Servo request right");
             char msgToSend[] = {SERVO, RIGHT, static_cast<char>(movement)};
             _arduinoIO.Send(msgToSend, sizeof(msgToSend));
             break;
         }
+
         case (SERVO_CENTER): {
             Log::logMessage(PI, LOG_DEBUG, "Servo request center");
             char msgToSend[] = {SERVO, CENTER};
@@ -31,12 +32,16 @@ void ControlServo::request(ServoCntl cntlType, uint8_t movement) {
             _servoCntl = SERVO_NONE;
             break;
         }
+
         case (SERVO_TURN_LEFT): {
             Log::logMessage(PI, LOG_DEBUG, "Servo request turn left");
             if (_servoCntl == SERVO_NONE ||
                 _servoCntl == SERVO_ADJUST_RIGHT ||
                 _servoCntl == SERVO_ADJUST_LEFT) {
-                _servoCntl = SERVO_LEFT;
+                _servoCntl = SERVO_TURN_LEFT;
+                if (movement=0)
+                    movement = 30;
+
                 request(SERVO_LEFT, 100);
                 Log::logMessage(PI, LOG_DEBUG, "Servo turn left timer set");
                 _timer.setTimeout([&]() {
@@ -45,19 +50,22 @@ void ControlServo::request(ServoCntl cntlType, uint8_t movement) {
 
                     _timer.stop();
                     _servoCntl = SERVO_NONE;
-                }, 1500 - ControlMotor::currentSpeed() * 10);
+                //}, 1500 - ControlMotor::currentSpeed() * 10);
+                }, movement*100);
             }
 
             break;
         }
 
         case (SERVO_TURN_RIGHT): {
-            Log::logMessage(PI, LOG_DEBUG, "Servo request turn left");
+            Log::logMessage(PI, LOG_DEBUG, "Servo request turn right");
             if (_servoCntl == SERVO_NONE ||
                 _servoCntl == SERVO_ADJUST_LEFT ||
                 _servoCntl == SERVO_ADJUST_RIGHT) {
                 _servoCntl = SERVO_TURN_RIGHT;
                 request(SERVO_RIGHT, 100);
+                if (movement=0)
+                    movement = 30;
 
                 Log::logMessage(PI, LOG_DEBUG, "Servo turn right timer set");
                 _timer.setTimeout([&]() {
@@ -66,9 +74,11 @@ void ControlServo::request(ServoCntl cntlType, uint8_t movement) {
 
                     _timer.stop();
                     _servoCntl = SERVO_NONE;
-                }, 1500 - ControlMotor::currentSpeed() * 10);
-                break;
+               // }, 1500 - ControlMotor::currentSpeed() * 10);
+                }, movement*100);
+
             }
+            break;
         }
 
         case (SERVO_3_LEFT):{
@@ -91,8 +101,8 @@ void ControlServo::request(ServoCntl cntlType, uint8_t movement) {
                         ControlMotor::request(MOTOR_MOVE_FORWARD);
                         _servoCntl = SERVO_NONE;
                         _timer.stop();
-                    }, 1500 - ControlMotor::currentSpeed()*10); //additional time for change of direction
-                }, 1150 - ControlMotor::currentSpeed()*10);
+                    }, 2000); //additional time for change of direction
+                }, 1550);
             }
             break;
 
@@ -118,8 +128,8 @@ void ControlServo::request(ServoCntl cntlType, uint8_t movement) {
                         ControlMotor::request(MOTOR_MOVE_FORWARD);
                         _servoCntl = SERVO_NONE;
                         _timer.stop();
-                    }, 1500 - ControlMotor::currentSpeed() *10); //additional time for change of direction
-                }, 11500 - ControlMotor::currentSpeed() * 10);
+                    }, 2000); //additional time for change of direction
+                }, 15500);
             }
             break;
         }
@@ -128,7 +138,7 @@ void ControlServo::request(ServoCntl cntlType, uint8_t movement) {
             Log::logMessage(PI, LOG_DEBUG, "Servo request adjust left");
             if (_servoCntl == SERVO_NONE) {
                 _servoCntl = SERVO_ADJUST_LEFT;
-                request(SERVO_LEFT, 50);
+                request(SERVO_LEFT, 75);
                 Log::logMessage(PI, LOG_DEBUG, "Servo adjust left timer set");
                 _timer.setTimeout([&]() {
                     Log::logMessage(PI, LOG_DEBUG, "Servo adjust left timer timed out");
@@ -137,8 +147,7 @@ void ControlServo::request(ServoCntl cntlType, uint8_t movement) {
                         _servoCntl == SERVO_NONE;
                     }
                     _timer.stop();
-                }, 310 - ControlMotor::currentSpeed() * 10);
-
+                }, 2000);
             }
             break;
 
@@ -147,17 +156,18 @@ void ControlServo::request(ServoCntl cntlType, uint8_t movement) {
             Log::logMessage(PI, LOG_DEBUG, "Servo request adjust right");
             if (_servoCntl == SERVO_NONE) {
                 _servoCntl == SERVO_ADJUST_RIGHT;
-                request(SERVO_RIGHT, 50);
+                request(SERVO_RIGHT, 75);
                 Log::logMessage(PI, LOG_DEBUG, "Servo adjust right timer set");
                 _timer.setTimeout([&]() {
                     Log::logMessage(PI, LOG_DEBUG, "Servo adjust right timer timed out");
-                    if(processingServoRqst()== SERVO_ADJUST_RIGHT) {
+                    if (processingServoRqst() == SERVO_ADJUST_RIGHT) {
                         request(SERVO_CENTER);
                         _servoCntl == SERVO_NONE;
                     }
 
                     _timer.stop();
-                }, 310 - ControlMotor::currentSpeed()*10);
+                    //  }, 310 - ControlMotor::currentSpeed()*10);
+                }, 2000);
             }
             break;
         }
